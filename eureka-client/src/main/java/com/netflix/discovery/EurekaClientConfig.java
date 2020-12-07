@@ -24,6 +24,8 @@ import com.google.inject.ImplementedBy;
 import com.netflix.discovery.shared.transport.EurekaTransportConfig;
 
 /**
+ * eureka客户端向<em> Eureka <em>服务器注册实例所需的配置信息。
+ *
  * Configuration information required by the eureka clients to register an
  * instance with <em>Eureka</em> server.
  *
@@ -72,6 +74,8 @@ public interface EurekaClientConfig {
     int getInstanceInfoReplicationIntervalSeconds();
 
     /**
+     * 指示最初将实例信息复制到eureka服务器的时间（以秒为单位）
+     *
      * Indicates how long initially (in seconds) to replicate instance info
      * to the eureka server
      */
@@ -369,9 +373,15 @@ public interface EurekaClientConfig {
     boolean shouldDisableDelta();
 
     /**
+     * 以逗号分隔的区域列表，将获取其eureka注册表信息。
+     * 必须定义{@link #getAvailabilityZones(String)}返回的每个区域的可用区。
+     * 否则，将导致发现客户端启动失败。
+     *
      * Comma separated list of regions for which the eureka registry information will be fetched. It is mandatory to
      * define the availability zones for each of these regions as returned by {@link #getAvailabilityZones(String)}.
      * Failing to do so, will result in failure of discovery client startup.
+     *
+     * @return 逗号分隔的区域列表，将为其获取eureka注册表信息。如果无需获取任何远程区域，则为<code> null <code>。
      *
      * @return Comma separated list of regions for which the eureka registry information will be fetched.
      * <code>null</code> if no remote region has to be fetched.
@@ -422,6 +432,9 @@ public interface EurekaClientConfig {
     List<String> getEurekaServerServiceUrls(String myZone);
 
     /**
+     * 指示在仅针对{@link com.netflix.appinfo.InstanceInfo.InstanceStatus#UP}
+     * 状态的实例的应用程序进行筛选之后，是否获取<em> applications <em>。
+     *
      * Indicates whether to get the <em>applications</em> after filtering the
      * applications for instances with only {@link com.netflix.appinfo.InstanceInfo.InstanceStatus#UP} states.
      *

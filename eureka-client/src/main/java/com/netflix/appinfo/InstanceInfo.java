@@ -315,11 +315,10 @@ public class InstanceInfo {
 
 
     public enum InstanceStatus {
-        UP, // Ready to receive traffic
-        DOWN, // Do not send traffic- healthcheck callback failed
-        STARTING, // Just about starting- initializations to be done - do not
-        // send traffic
-        OUT_OF_SERVICE, // Intentionally shutdown for traffic
+        UP, // Ready to receive traffic 准备接收流量
+        DOWN, // Do not send traffic- healthcheck callback failed  不发送流量-运行状况检查回调失败
+        STARTING, // Just about starting- initializations to be done - do not send traffic  即将开始-要完成初始化-不发送流量
+        OUT_OF_SERVICE, // Intentionally shutdown for traffic  故意关闭流量
         UNKNOWN;
 
         public static InstanceStatus toEnum(String s) {
@@ -1238,6 +1237,8 @@ public class InstanceInfo {
     }
 
     /**
+     * 设置脏标志，以便在下一次检测信号时将实例信息携带到发现服务器。
+     *
      * Sets the dirty flag so that the instance information can be carried to
      * the discovery server on the next heartbeat.
      */

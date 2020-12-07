@@ -61,25 +61,35 @@ class InstanceInfoReplicator implements Runnable {
     }
 
     public void start(int initialDelayMs) {
+        // 设置为开始
         if (started.compareAndSet(false, true)) {
+            // 设置为 脏数据（默认启动，数据未同步，认为是脏数据，同步后会更新为 false）
             instanceInfo.setIsDirty();  // for initial register
+            // 设置 scheduler 调度任务
             Future next = scheduler.schedule(this, initialDelayMs, TimeUnit.SECONDS);
+            // AtomicReference<Future> 是一个引用，为了对线程的可见性
             scheduledPeriodicRef.set(next);
         }
     }
 
     public void stop() {
+        // 关闭并等待终止
         shutdownAndAwaitTermination(scheduler);
+        // 启动标识，设置为 false
         started.set(false);
     }
 
     private void shutdownAndAwaitTermination(ExecutorService pool) {
+        // 关闭线程池
         pool.shutdown();
         try {
+            // 等待终止
             if (!pool.awaitTermination(3, TimeUnit.SECONDS)) {
+                // 立即关闭
                 pool.shutdownNow();
             }
         } catch (InterruptedException e) {
+            // 这里不响应，中断信息.
             logger.warn("InstanceInfoReplicator stop interrupted");
         }
     }

@@ -283,6 +283,8 @@ public class Applications {
     }
 
     /**
+     * 随机整理整个区域，以使实例将不会总是以相同的顺序返回。
+     *
      * Shuffles a whole region so that the instances will not always be returned
      * in the same order.
      * 
