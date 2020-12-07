@@ -9,3 +9,5 @@ include 'eureka-client',
         'eureka-resources',
         'eureka-examples',
         'eureka-test-utils'
+include 'demo1'
+

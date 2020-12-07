@@ -43,6 +43,8 @@ import com.google.inject.ImplementedBy;
 public interface EurekaInstanceConfig {
 
     /**
+     * 实例id
+     *
      * Get the unique Id (within the scope of the appName) of this instance to be registered with eureka.
      *
      * @return the (appname scoped) unique id for this instance
@@ -50,6 +52,8 @@ public interface EurekaInstanceConfig {
     String getInstanceId();
 
     /**
+     * 获取 application 名字，注册到 eureka
+     *
      * Get the name of the application to be registered with eureka.
      *
      * @return string denoting the name.
@@ -57,6 +61,8 @@ public interface EurekaInstanceConfig {
     String getAppname();
 
     /**
+     * 获取 application group，注册到 eureka
+     *
      * Get the name of the application group to be registered with eureka.
      *
      * @return string denoting the name.
@@ -64,6 +70,10 @@ public interface EurekaInstanceConfig {
     String getAppGroupName();
 
     /**
+     * 指示是否应启用实例以将流量作为
+     * 一旦在尤里卡注册。有时应用程序可能
+     * 需要做一些预处理前，它准备采取流量。
+     *
      * Indicates whether the instance should be enabled for taking traffic as
      * soon as it is registered with eureka. Sometimes the application might
      * need to do some pre-processing before it is ready to take traffic.
