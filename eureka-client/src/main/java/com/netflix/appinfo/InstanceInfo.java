@@ -315,8 +315,8 @@ public class InstanceInfo {
 
 
     public enum InstanceStatus {
-        UP, // Ready to receive traffic 准备接收流量
-        DOWN, // Do not send traffic- healthcheck callback failed  不发送流量-运行状况检查回调失败
+        UP, // Ready to receive traffic （代表，已注册）准备接收流量
+        DOWN, // Do not send traffic- healthcheck callback failed （代表，已关闭） 不发送流量-运行状况检查回调失败
         STARTING, // Just about starting- initializations to be done - do not send traffic  即将开始-要完成初始化-不发送流量
         OUT_OF_SERVICE, // Intentionally shutdown for traffic  故意关闭流量
         UNKNOWN;

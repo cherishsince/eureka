@@ -44,7 +44,9 @@ import com.thoughtworks.xstream.annotations.XStreamImplicit;
 import com.thoughtworks.xstream.annotations.XStreamOmitField;
 
 /**
- * The application class holds the list of instances for a particular
+ * 应用程序类保存特定应用程序的实例列表。
+ *
+ * the application class holds the list of instances for a particular
  * application.
  *
  * @author Karthik Ranganathan

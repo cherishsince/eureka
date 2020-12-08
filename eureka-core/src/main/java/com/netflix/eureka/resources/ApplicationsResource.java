@@ -77,6 +77,8 @@ public class ApplicationsResource {
     }
 
     /**
+     * 获取 Application 信息
+     *
      * Gets information about a particular {@link com.netflix.discovery.shared.Application}.
      *
      * @param version
@@ -99,6 +101,8 @@ public class ApplicationsResource {
     }
 
     /**
+     * 获取所有 Applications
+     *
      * Get information about all {@link com.netflix.discovery.shared.Applications}.
      *
      * @param version the version of the request.
@@ -165,6 +169,8 @@ public class ApplicationsResource {
     }
 
     /**
+     * 获取所有增量的 Applications
+     *
      * Get information about all delta changes in {@link com.netflix.discovery.shared.Applications}.
      *
      * <p>

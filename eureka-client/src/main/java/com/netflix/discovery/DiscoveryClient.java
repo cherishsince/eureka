@@ -1158,10 +1158,12 @@ public class DiscoveryClient implements EurekaClient {
             // tip: getAppsHashCode 是 Applications hash码，不过重写了的，可以看做为 version
             logger.debug("Got delta update with apps hashcode {}", delta.getAppsHashCode());
             String reconcileHashCode = "";
-            // tip: 这里 tryLock
+            // tip: 这里 tryLock，请求时间是不定的，会发生两个同时回来的情况
             if (fetchRegistryUpdateLock.tryLock()) {
                 try {
+                    // 增量更新
                     updateDelta(delta);
+                    // 增量更新后去生成 hashCode
                     reconcileHashCode = getReconcileHashCode(applications);
                 } finally {
                     fetchRegistryUpdateLock.unlock();
@@ -1169,8 +1171,13 @@ public class DiscoveryClient implements EurekaClient {
             } else {
                 logger.warn("Cannot acquire update lock, aborting getAndUpdateDelta");
             }
+            // 由于某些原因，实例数量有所不同
             // There is a diff in number of instances for some reason
+
+            // tip: hashCode 是有规则的，服务端和客户端的 生成规则是一样的，增量更新后看自己hashCode 是否是一样的
+            // tip: 如果不一样，代表客户端的数据和服务端数据不一样。
             if (!reconcileHashCode.equals(delta.getAppsHashCode()) || clientConfig.shouldLogDeltaDiff()) {
+                // 全量拉取
                 reconcileAndLogDifference(delta, reconcileHashCode);  // this makes a remoteCall
             }
         } else {
@@ -1193,6 +1200,8 @@ public class DiscoveryClient implements EurekaClient {
     }
 
     /**
+     * 协调eureka服务器和客户端注册表信息，并记录差异（如果有）。进行对帐时，遵循以下流程：
+     *
      * Reconcile the eureka server and client registry information and logs the differences if any.
      * When reconciling, the following flow is observed:
      * <p>
@@ -1211,22 +1220,23 @@ public class DiscoveryClient implements EurekaClient {
     private void reconcileAndLogDifference(Applications delta, String reconcileHashCode) throws Throwable {
         logger.debug("The Reconcile hashcodes do not match, client : {}, server : {}. Getting the full registry",
                 reconcileHashCode, delta.getAppsHashCode());
-
+        // hashCode 不匹配次数 +1
         RECONCILE_HASH_CODES_MISMATCH.increment();
-
+        // 获取拉取注册信息 次数
         long currentUpdateGeneration = fetchRegistryGeneration.get();
-
+        // 全量拉取
         EurekaHttpResponse<Applications> httpResponse = clientConfig.getRegistryRefreshSingleVipAddress() == null
                 ? eurekaTransport.queryClient.getApplications(remoteRegionsRef.get())
                 : eurekaTransport.queryClient.getVip(clientConfig.getRegistryRefreshSingleVipAddress(), remoteRegionsRef.get());
+        // 获取到 eureka server 的 Applications
         Applications serverApps = httpResponse.getEntity();
-
         if (serverApps == null) {
             logger.warn("Cannot fetch full registry from the server; reconciliation failure");
             return;
         }
-
+        // 拉取注册信息 次数+1
         if (fetchRegistryGeneration.compareAndSet(currentUpdateGeneration, currentUpdateGeneration + 1)) {
+            // 打乱一下 serverApps
             localRegionApps.set(this.filterAndShuffle(serverApps));
             getApplications().setVersion(delta.getVersion());
             logger.debug(
@@ -1239,6 +1249,8 @@ public class DiscoveryClient implements EurekaClient {
     }
 
     /**
+     * 将从eureka服务器获取的 “增量信息” 更新到本地缓存中。
+     *
      * Updates the delta information fetches from the eureka server into the
      * local cache.
      *
@@ -1249,19 +1261,28 @@ public class DiscoveryClient implements EurekaClient {
         int deltaCount = 0;
         for (Application app : delta.getRegisteredApplications()) {
             for (InstanceInfo instance : app.getInstances()) {
+                // tip: 获取本地的 Applications
                 Applications applications = getApplications();
                 String instanceRegion = instanceRegionChecker.getInstanceRegion(instance);
+
+                // 区域检查，不在这个区域进入
                 if (!instanceRegionChecker.isLocalRegion(instanceRegion)) {
                     Applications remoteApps = remoteRegionVsApps.get(instanceRegion);
+                    // 如果为 null，创建一个区域(Applications)
                     if (null == remoteApps) {
                         remoteApps = new Applications();
                         remoteRegionVsApps.put(instanceRegion, remoteApps);
                     }
+                    // 设置区域
                     applications = remoteApps;
                 }
 
+                // 增量处理 +1
                 ++deltaCount;
                 if (ActionType.ADDED.equals(instance.getActionType())) {
+                    // tip：增加动作
+
+                    // 本地 applications 没有就添加
                     Application existingApp = applications.getRegisteredApplications(instance.getAppName());
                     if (existingApp == null) {
                         applications.addApplication(app);
@@ -1269,23 +1290,32 @@ public class DiscoveryClient implements EurekaClient {
                     logger.debug("Added instance {} to the existing apps in region {}", instance.getId(), instanceRegion);
                     applications.getRegisteredApplications(instance.getAppName()).addInstance(instance);
                 } else if (ActionType.MODIFIED.equals(instance.getActionType())) {
+                    // tip: 修改动作
+
+                    // 本地 applications 没有就添加
                     Application existingApp = applications.getRegisteredApplications(instance.getAppName());
                     if (existingApp == null) {
                         applications.addApplication(app);
                     }
                     logger.debug("Modified instance {} to the existing apps ", instance.getId());
-
+                    // tip: 获取当前 appName 的 application，然后再把更新的 instanceInfo 设置进去
                     applications.getRegisteredApplications(instance.getAppName()).addInstance(instance);
 
                 } else if (ActionType.DELETED.equals(instance.getActionType())) {
+                    // tip：删除动作
+
+                    // Application 存在的情况，删除 instanceInfo 信息
                     Application existingApp = applications.getRegisteredApplications(instance.getAppName());
                     if (existingApp != null) {
                         logger.debug("Deleted instance {} to the existing apps ", instance.getId());
                         existingApp.removeInstance(instance);
                         /*
+                         * 如果实例列表为空，则从应用程序中找到所有实例列表（实例状态的状态不仅是UP状态，还有其他状态），然后删除该应用程序。
                          * We find all instance list from application(The status of instance status is not only the status is UP but also other status)
                          * if instance list is empty, we remove the application.
                          */
+                        // tip: 如果 Application 没有 实例了，就要删除 Application
+                        // tip: Application是应用，instanceInfo 是节点信息，这个应用没节点了，应用也需要删除
                         if (existingApp.getInstancesAsIsFromEureka().isEmpty()) {
                             applications.removeApplication(existingApp);
                         }

@@ -72,6 +72,8 @@ public class ApplicationResource {
     }
 
     /**
+     * 获取有 Application 信息
+     *
      * Gets information about a particular {@link com.netflix.discovery.shared.Application}.
      *
      * @param version
@@ -119,6 +121,8 @@ public class ApplicationResource {
     }
 
     /**
+     * 根据id，获取指定的 InstanceInfo 信息
+     *
      * Gets information about a particular instance of an application.
      *
      * @param id
@@ -131,6 +135,8 @@ public class ApplicationResource {
     }
 
     /**
+     * 注册有关特定实例的信息
+     *
      * Registers information about a particular instance for an
      * {@link com.netflix.discovery.shared.Application}.
      *
@@ -145,7 +151,8 @@ public class ApplicationResource {
     public Response addInstance(InstanceInfo info,
                                 @HeaderParam(PeerEurekaNode.HEADER_REPLICATION) String isReplication) {
         logger.debug("Registering instance {} (replication={})", info.getId(), isReplication);
-        // validate that the instanceinfo contains all the necessary required fields
+        // 校验 InstanceInfo 必填字段
+        // validate that the instanceInfo contains all the necessary required fields
         if (isBlank(info.getId())) {
             return Response.status(400).entity("Missing instanceId").build();
         } else if (isBlank(info.getHostName())) {
@@ -162,6 +169,7 @@ public class ApplicationResource {
             return Response.status(400).entity("Missing dataCenterInfo Name").build();
         }
 
+        // 处理客户端可能在数据缺失的情况下向错误的DataCenterInfo注册的情况
         // handle cases where clients may be registering with bad DataCenterInfo with missing data
         DataCenterInfo dataCenterInfo = info.getDataCenterInfo();
         if (dataCenterInfo instanceof UniqueIdentifier) {
@@ -172,6 +180,7 @@ public class ApplicationResource {
                     String entity = "DataCenterInfo of type " + dataCenterInfo.getClass() + " must contain a valid id";
                     return Response.status(400).entity(entity).build();
                 } else if (dataCenterInfo instanceof AmazonInfo) {
+                    // 亚马逊
                     AmazonInfo amazonInfo = (AmazonInfo) dataCenterInfo;
                     String effectiveId = amazonInfo.get(AmazonInfo.MetaDataKey.instanceId);
                     if (effectiveId == null) {
@@ -182,12 +191,14 @@ public class ApplicationResource {
                 }
             }
         }
-
+        // 开始注册
         registry.register(info, "true".equals(isReplication));
         return Response.status(204).build();  // 204 to be backwards compatible
     }
 
     /**
+     * 返回特定应用程序的应用程序名称。
+     *
      * Returns the application name of a particular application.
      *
      * @return the application name of a particular application.

@@ -86,8 +86,11 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             .<String, InstanceStatus>build().asMap();
 
     // CircularQueues here for debugging/statistics purposes only
+    // 最近注册队列
     private final CircularQueue<Pair<Long, String>> recentRegisteredQueue;
+    // 最近取消的队列
     private final CircularQueue<Pair<Long, String>> recentCanceledQueue;
+    // 最近变更的队列
     private ConcurrentLinkedQueue<RecentlyChangedItem> recentlyChangedQueue = new ConcurrentLinkedQueue<RecentlyChangedItem>();
 
     private final ReentrantReadWriteLock readWriteLock = new ReentrantReadWriteLock();
@@ -103,6 +106,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
     protected String[] allKnownRemoteRegions = EMPTY_STR_ARRAY;
     protected volatile int numberOfRenewsPerMinThreshold;
+    // 客户端发送续约，预期的一个数量(就是客户端数量)
     protected volatile int expectedNumberOfClientsSendingRenews;
 
     protected final EurekaServerConfig serverConfig;
@@ -168,6 +172,8 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     /**
+     * 完全清除注册表。
+     *
      * Completely clear the registry.
      */
     @Override
@@ -186,31 +192,45 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     /**
+     * 注册具有给定持续时间的新实例。
      * Registers a new instance with a given duration.
      *
      * @see com.netflix.eureka.lease.LeaseManager#register(java.lang.Object, int, boolean)
      */
     public void register(InstanceInfo registrant, int leaseDuration, boolean isReplication) {
+        // 读锁(ReentrantReadWriteLock)
         read.lock();
         try {
+            // 根据 applicationName 获取注册的实例信息
             Map<String, Lease<InstanceInfo>> gMap = registry.get(registrant.getAppName());
+            // 计数器 +1
             REGISTER.increment(isReplication);
+            // 如果 Application 应用程序为 null，就代表还没注册过
             if (gMap == null) {
+                // tip: 没有就创建一个，然后给 gMap
                 final ConcurrentHashMap<String, Lease<InstanceInfo>> gNewMap = new ConcurrentHashMap<String, Lease<InstanceInfo>>();
                 gMap = registry.putIfAbsent(registrant.getAppName(), gNewMap);
                 if (gMap == null) {
                     gMap = gNewMap;
                 }
             }
+
+            // id是我们在eureka那个很长的，如：localhost:demo-provider:18080
+            // tip: 新注册的 gMap 是没有的
             Lease<InstanceInfo> existingLease = gMap.get(registrant.getId());
+
+            // 如果已经有租约，则保留最后的脏时间戳而不覆盖它
             // Retain the last dirty timestamp without overwriting it, if there is already a lease
+            // tip: 这里是属于重复注册，保留最后一个注册的 InstanceInfo
             if (existingLease != null && (existingLease.getHolder() != null)) {
                 Long existingLastDirtyTimestamp = existingLease.getHolder().getLastDirtyTimestamp();
                 Long registrationLastDirtyTimestamp = registrant.getLastDirtyTimestamp();
                 logger.debug("Existing lease found (existing={}, provided={}", existingLastDirtyTimestamp, registrationLastDirtyTimestamp);
 
+                // 这是一个>而不是> =，因为如果时间戳相等，我们仍然采用远程传输的InstanceInfo而不是服务器本地副本。
                 // this is a > instead of a >= because if the timestamps are equal, we still take the remote transmitted
                 // InstanceInfo instead of the server local copy.
+                // tip: 如果已存在的脏数据时间 > 注册的脏数据时间，那么保留服务器的
                 if (existingLastDirtyTimestamp > registrationLastDirtyTimestamp) {
                     logger.warn("There is an existing lease and the existing lease's dirty timestamp {} is greater" +
                             " than the one that is being registered {}", existingLastDirtyTimestamp, registrationLastDirtyTimestamp);
@@ -218,16 +238,21 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                     registrant = existingLease.getHolder();
                 }
             } else {
+                // 租赁不存在的时候，就注册一个新的
                 // The lease does not exist and hence it is a new registration
                 synchronized (lock) {
                     if (this.expectedNumberOfClientsSendingRenews > 0) {
+                        // 由于客户端要注册，因此请增加发送续订的客户端数量
                         // Since the client wants to register it, increase the number of clients sending renews
                         this.expectedNumberOfClientsSendingRenews = this.expectedNumberOfClientsSendingRenews + 1;
+                        // 更新每分钟阈值
                         updateRenewsPerMinThreshold();
                     }
                 }
                 logger.debug("No previous lease information found; it is new registration");
             }
+
+            // 注册的实例信息，leaseDuration 租赁时间90秒，默认
             Lease<InstanceInfo> lease = new Lease<InstanceInfo>(registrant, leaseDuration);
             if (existingLease != null) {
                 lease.setServiceUpTimestamp(existingLease.getServiceUpTimestamp());
@@ -236,36 +261,47 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             recentRegisteredQueue.add(new Pair<Long, String>(
                     System.currentTimeMillis(),
                     registrant.getAppName() + "(" + registrant.getId() + ")"));
+            // 这是发生覆盖状态的初始状态转移的地方
             // This is where the initial state transfer of overridden status happens
             if (!InstanceStatus.UNKNOWN.equals(registrant.getOverriddenStatus())) {
                 logger.debug("Found overridden status {} for instance {}. Checking to see if needs to be add to the "
                                 + "overrides", registrant.getOverriddenStatus(), registrant.getId());
+                // 覆盖实例状态
                 if (!overriddenInstanceStatusMap.containsKey(registrant.getId())) {
                     logger.info("Not found overridden id {} and hence adding it", registrant.getId());
                     overriddenInstanceStatusMap.put(registrant.getId(), registrant.getOverriddenStatus());
                 }
             }
+            // 覆盖实例状态
             InstanceStatus overriddenStatusFromMap = overriddenInstanceStatusMap.get(registrant.getId());
             if (overriddenStatusFromMap != null) {
                 logger.info("Storing overridden status {} from map", overriddenStatusFromMap);
                 registrant.setOverriddenStatus(overriddenStatusFromMap);
             }
 
+            // 根据覆盖的状态规则设置状态
             // Set the status based on the overridden status rules
             InstanceStatus overriddenInstanceStatus = getOverriddenInstanceStatus(registrant, existingLease, isReplication);
             registrant.setStatusWithoutDirty(overriddenInstanceStatus);
 
+            // 如果租约已注册为UP状态，请设置租约服务启动时间戳记
             // If the lease is registered with UP status, set lease service up timestamp
             if (InstanceStatus.UP.equals(registrant.getStatus())) {
+                // 记录一下启动时间
                 lease.serviceUp();
             }
+            // 设置actionType为add
             registrant.setActionType(ActionType.ADDED);
+            // tip：recentlyChangedQueue 用于记录最近更新，增量拉取，全靠它
             recentlyChangedQueue.add(new RecentlyChangedItem(lease));
+            // register 最后更新时间
             registrant.setLastUpdatedTimestamp();
+            // tip: 默认是有 responseCache的，有些是不需要 cache的，这里就是设置，不需要使用 cache的key
             invalidateCache(registrant.getAppName(), registrant.getVIPAddress(), registrant.getSecureVipAddress());
             logger.info("Registered instance {}/{} with status {} (replication={})",
                     registrant.getAppName(), registrant.getId(), registrant.getStatus(), isReplication);
         } finally {
+            // 解锁
             read.unlock();
         }
     }
@@ -1196,7 +1232,9 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         private Lease<InstanceInfo> leaseInfo;
 
         public RecentlyChangedItem(Lease<InstanceInfo> lease) {
+            // 租赁信息
             this.leaseInfo = lease;
+            // 租赁的时间
             lastUpdateTime = System.currentTimeMillis();
         }
 
@@ -1338,12 +1376,18 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     private TimerTask getDeltaRetentionTask() {
-        return new TimerTask() {
 
+        // tip: recentlyChangedQueue 是一个无边界的队列
+        // tip: recentlyChangedQueue 只保存近3分钟更新的(默认是三分钟) instance信息
+        // tip: 这里是通过 TimerTask 来进行处理，过期删除的动作
+
+        return new TimerTask() {
             @Override
             public void run() {
+                // 获取队列注册的所有信息
                 Iterator<RecentlyChangedItem> it = recentlyChangedQueue.iterator();
                 while (it.hasNext()) {
+                    // 当前instance最后更新的时间，是否大于现在时间 + 延时时间(3分钟)，大于3分钟直接 remove
                     if (it.next().getLastUpdateTime() <
                             System.currentTimeMillis() - serverConfig.getRetentionTimeInMSInDeltaQueue()) {
                         it.remove();
@@ -1352,7 +1396,6 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                     }
                 }
             }
-
         };
     }
 }

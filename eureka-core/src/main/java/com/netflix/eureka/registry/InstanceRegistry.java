@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * 实例注册
+ *
  * @author Tomasz Bak
  */
 public interface InstanceRegistry extends LeaseManager<InstanceInfo>, LookupService<String> {

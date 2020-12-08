@@ -47,6 +47,8 @@ import com.thoughtworks.xstream.annotations.XStreamAlias;
 import com.thoughtworks.xstream.annotations.XStreamImplicit;
 
 /**
+ * 封装由eureka服务器返回的所有注册表信息的类。
+ *
  * The class that wraps all the registry information returned by eureka server.
  *
  * <p>

@@ -63,6 +63,8 @@ import javax.inject.Singleton;
 import static com.netflix.eureka.Names.METRIC_REGISTRY_PREFIX;
 
 /**
+ * 处理所有复制到{@link AbstractInstanceRegistry}的操作，以复制到对等的<em> Eureka <em>节点，以使它们保持同步。
+ *
  * Handles replication of all operations to {@link AbstractInstanceRegistry} to peer
  * <em>Eureka</em> nodes to keep them all in sync.
  *
@@ -392,6 +394,8 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 注册有关{@link InstanceInfo}的信息，并将此信息复制到所有对等的eureka节点。如果这是来自其他副本节点的复制事件，则不会复制。
+     *
      * Registers the information about the {@link InstanceInfo} and replicates
      * this information to all peer eureka nodes. If this is replication event
      * from other replica nodes then it is not replicated.
@@ -404,11 +408,15 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      */
     @Override
     public void register(final InstanceInfo info, final boolean isReplication) {
+        // 默认续订时间 90 秒
         int leaseDuration = Lease.DEFAULT_DURATION_IN_SECS;
+        // 指定的续订时间优先
         if (info.getLeaseInfo() != null && info.getLeaseInfo().getDurationInSecs() > 0) {
             leaseDuration = info.getLeaseInfo().getDurationInSecs();
         }
+        // 注册服务
         super.register(info, leaseDuration, isReplication);
+        // 复制到其他的 eureka server 节点
         replicateToPeers(Action.Register, info.getAppName(), info.getId(), info, null, isReplication);
     }
 

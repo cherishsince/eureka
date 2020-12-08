@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.annotation.JsonTypeIdResolver;
 import com.netflix.discovery.converters.jackson.DataCenterTypeInfoResolver;
 
 /**
+ * 数据中心（Netflix, Amazon, MyOwn）
+ *
  * A simple interface for indicating which <em>datacenter</em> a particular instance belongs.
  *
  * @author Karthik Ranganathan

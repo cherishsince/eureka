@@ -33,6 +33,8 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
+ * 使用AWS特定用例覆盖某些方法。
+ *
  * Override some methods with aws specific use cases.
  *
  * @author David Liu

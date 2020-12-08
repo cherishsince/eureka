@@ -24,10 +24,18 @@ import com.netflix.eureka.resources.ASGResource;
 import java.util.List;
 
 /**
+ * 对等感知实例注册表
+ *
  * @author Tomasz Bak
  */
 public interface PeerAwareInstanceRegistry extends InstanceRegistry {
 
+    /**
+     * 初始化
+     *
+     * @param peerEurekaNodes
+     * @throws Exception
+     */
     void init(PeerEurekaNodes peerEurekaNodes) throws Exception;
 
     /**

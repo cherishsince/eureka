@@ -243,6 +243,8 @@ public class ResponseCacheImpl implements ResponseCache {
     }
 
     /**
+     * 使特定应用程序的缓存无效。
+     *
      * Invalidate the cache of a particular application.
      *
      * @param appName the application name of the application.
@@ -270,6 +272,8 @@ public class ResponseCacheImpl implements ResponseCache {
     }
 
     /**
+     * 给定键列表，使缓存信息无效。
+     *
      * Invalidate the cache information given the list of keys.
      *
      * @param keys the list of keys for which the cache information needs to be invalidated.

@@ -101,6 +101,8 @@ public enum EurekaMonitors {
     }
 
     /**
+     * 根据这是由于从其他eureka服务器进行复制还是由于eureka客户端启动的操作而增加给定统计信息的计数器。
+     *
      * Increment the counter for the given statistic based on whether this is
      * because of replication from other eureka servers or it is a eureka client
      * initiated action.
@@ -109,8 +111,9 @@ public enum EurekaMonitors {
      *            true if this a replication, false otherwise.
      */
     public void increment(boolean isReplication) {
+        // 计数器 +1
         counter.incrementAndGet();
-
+        // myZoneCounter 是复制的次数
         if (!isReplication) {
             myZoneCounter.incrementAndGet();
         }
