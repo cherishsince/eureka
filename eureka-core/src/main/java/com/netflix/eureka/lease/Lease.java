@@ -19,9 +19,16 @@ package com.netflix.eureka.lease;
 import com.netflix.eureka.registry.AbstractInstanceRegistry;
 
 /**
+ * 保存的租赁信息（里面保存了多个 InstanceInfo 实例）
+ *
+ * 描述{@link T}的基于时间的可用性。目的是避免由于非正常关机而导致实例在{@link AbstractInstanceRegistry}中累积，这在AWS环境中并不罕见。
+ *
  * Describes a time-based availability of a {@link T}. Purpose is to avoid
  * accumulation of instances in {@link AbstractInstanceRegistry} as result of ungraceful
  * shutdowns that is not uncommon in AWS environments.
+ *
+ * 如果租约到期而没有续约，则它最终将到期，从而标记关联的{@link T}以立即驱逐-这类似于明确的取消，
+ * 不同之处在于{@link T}和{@link LeaseManager}之间没有通信。
  *
  * If a lease elapses without renewals, it will eventually expire consequently
  * marking the associated {@link T} for immediate eviction - this is similar to
@@ -38,6 +45,7 @@ public class Lease<T> {
 
     public static final int DEFAULT_DURATION_IN_SECS = 90;
 
+    // hodler 保存的是一个 list<InstanceInfo> 信息
     private T holder;
     private long evictionTimestamp;
     private long registrationTimestamp;

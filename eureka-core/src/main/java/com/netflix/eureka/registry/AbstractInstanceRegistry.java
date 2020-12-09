@@ -77,14 +77,16 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     private static final Logger logger = LoggerFactory.getLogger(AbstractInstanceRegistry.class);
 
     private static final String[] EMPTY_STR_ARRAY = new String[0];
+    // 注册的实例
     private final ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>> registry
             = new ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>>();
+    // 区域名称VS远程注册表
     protected Map<String, RemoteRegionRegistry> regionNameVSRemoteRegistry = new HashMap<String, RemoteRegionRegistry>();
+    // 保存的是 服务的状态
     protected final ConcurrentMap<String, InstanceStatus> overriddenInstanceStatusMap = CacheBuilder
             .newBuilder().initialCapacity(500)
             .expireAfterAccess(1, TimeUnit.HOURS)
             .<String, InstanceStatus>build().asMap();
-
     // CircularQueues here for debugging/statistics purposes only
     // 最近注册队列
     private final CircularQueue<Pair<Long, String>> recentRegisteredQueue;
@@ -307,7 +309,11 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     /**
+     * 关闭一个注册的 Instance
+     *
      * Cancels the registration of an instance.
+     *
+     * <p>通常，它在关闭客户端以通知服务器从流量中删除实例时由客户端调用。 <p>
      *
      * <p>
      * This is normally invoked by a client when it shuts down informing the
@@ -322,33 +328,51 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      */
     @Override
     public boolean cancel(String appName, String id, boolean isReplication) {
+        // 内部关闭
         return internalCancel(appName, id, isReplication);
     }
 
     /**
+     * {@link #cancel（String，String，boolean）}方法被{@link PeerAwareInstanceRegistry}覆盖，因此每个取消请求都复制到对等方。
+     * 但是，对于在远程对等方中被视为有效取消的过期，这是不希望的，因此不会启动自我保存模式。
+     *
      * {@link #cancel(String, String, boolean)} method is overridden by {@link PeerAwareInstanceRegistry}, so each
      * cancel request is replicated to the peers. This is however not desired for expires which would be counted
      * in the remote peers as valid cancellations, so self preservation mode would not kick-in.
      */
     protected boolean internalCancel(String appName, String id, boolean isReplication) {
+        // ReentrantReadWriteLock 读取lock
         read.lock();
         try {
+            // 取消注册计数 +1
             CANCEL.increment(isReplication);
+            // 从 registry 根据 appName 获取注册实例
             Map<String, Lease<InstanceInfo>> gMap = registry.get(appName);
+            // 记录删除的实例
             Lease<InstanceInfo> leaseToCancel = null;
             if (gMap != null) {
+                // 删除注册的实例
                 leaseToCancel = gMap.remove(id);
             }
+
+            // tip: recentCanceledQueue 是一个取消的队列
+            // tip: overriddenInstanceStatusMap 用于保存服务状态
+
+            // 将取消的实例，添加到 recentCanceledQueue
             recentCanceledQueue.add(new Pair<Long, String>(System.currentTimeMillis(), appName + "(" + id + ")"));
+            // 删除实例的状态缓存
             InstanceStatus instanceStatus = overriddenInstanceStatusMap.remove(id);
             if (instanceStatus != null) {
                 logger.debug("Removed instance id {} from the overridden map which has value {}", id, instanceStatus.name());
             }
+            // leaseToCancel 是我们删除的实例，如果没找到，这里需要 +1
             if (leaseToCancel == null) {
+                // 未找到取消 count +1
                 CANCEL_NOT_FOUND.increment(isReplication);
                 logger.warn("DS: Registry: cancel failed because Lease is not registered for: {}/{}", appName, id);
                 return false;
             } else {
+                // tip: 这里删除实例
                 leaseToCancel.cancel();
                 InstanceInfo instanceInfo = leaseToCancel.getHolder();
                 String vip = null;

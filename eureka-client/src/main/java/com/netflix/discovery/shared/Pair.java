@@ -17,6 +17,7 @@
 package com.netflix.discovery.shared;
 
 /**
+ * 一个实用程序类，用于存储需要成对存在的任何信息。
  * An utility class for stores any information that needs to exist as a pair.
  *
  * @author Karthik Ranganathan
