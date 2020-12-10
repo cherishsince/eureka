@@ -1120,6 +1120,8 @@ public class InstanceInfo {
     }
 
     /**
+     * 获取此实例的虚拟Internet协议地址。如果未指定，则默认为主机名。
+     *
      * Gets the Virtual Internet Protocol address for this instance. Defaults to
      * hostname if not specified.
      *
@@ -1131,6 +1133,8 @@ public class InstanceInfo {
     }
 
     /**
+     * 获取此实例的安全虚拟Internet协议地址。如果未指定，则默认为主机名。
+     *
      * Get the Secure Virtual Internet Protocol address for this instance.
      * Defaults to hostname if not specified.
      *
@@ -1311,6 +1315,8 @@ public class InstanceInfo {
     }
 
     /**
+     * 设置在服务器上对此实例执行的操作类型。
+     *
      * Set the action type performed on this instance in the server.
      *
      * @param actionType action type done on the instance.

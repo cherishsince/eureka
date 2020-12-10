@@ -45,7 +45,7 @@ public class Lease<T> {
 
     public static final int DEFAULT_DURATION_IN_SECS = 90;
 
-    // hodler 保存的是一个 list<InstanceInfo> 信息
+    // holder 保存的是一个 list<InstanceInfo> 信息
     private T holder;
     private long evictionTimestamp;
     private long registrationTimestamp;
@@ -73,9 +73,12 @@ public class Lease<T> {
     }
 
     /**
+     * 通过更新驱逐时间来取消租约。
+     *
      * Cancels the lease by updating the eviction time.
      */
     public void cancel() {
+        // 更新驱逐时间
         if (evictionTimestamp <= 0) {
             evictionTimestamp = System.currentTimeMillis();
         }
@@ -157,6 +160,8 @@ public class Lease<T> {
     }
 
     /**
+     * 返回租约的持有人。
+     *
      * Returns the holder of the lease.
      */
     public T getHolder() {

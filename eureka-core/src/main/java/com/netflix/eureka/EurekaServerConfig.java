@@ -113,6 +113,9 @@ public interface EurekaServerConfig {
     boolean shouldEnableSelfPreservation();
 
     /**
+     * 在{@link #getRenewalThresholdUpdateIntervalMs()}指定的时间段内，客户端期望的最小续订百分比。
+     * 如果续订下降到阈值以下，则在启用{@link #shouldEnableSelfPreservation()}的情况下，失效将被禁用。
+     *
      * The minimum percentage of renewals that is expected from the clients in
      * the period specified by {@link #getRenewalThresholdUpdateIntervalMs()}.
      * If the renewals drop below the threshold, the expirations are disabled if

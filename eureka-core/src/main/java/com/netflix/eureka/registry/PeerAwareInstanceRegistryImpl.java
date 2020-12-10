@@ -383,11 +383,11 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      * java.lang.String, long, boolean)
      */
     @Override
-    public boolean cancel(final String appName, final String id,
-                          final boolean isReplication) {
+    public boolean cancel(final String appName, final String id, final boolean isReplication) {
+        // 调用 super.cancel()
         if (super.cancel(appName, id, isReplication)) {
+            // tip: 关闭成功后，复制给其他节点
             replicateToPeers(Action.Cancel, appName, id, null, null, isReplication);
-
             return true;
         }
         return false;
@@ -532,6 +532,8 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 更新续订阈值
+     *
      * Updates the <em>renewal threshold</em> based on the current number of
      * renewals. The threshold is a percentage as specified in
      * {@link EurekaServerConfig#getRenewalPercentThreshold()} of renewals
@@ -589,6 +591,8 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 检查续订次数是否小于阈值。
+     *
      * Checks if the number of renewals is lesser than threshold.
      *
      * @return 0 if the renewals are greater than threshold, 1 otherwise.

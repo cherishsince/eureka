@@ -37,6 +37,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * <em> jersey <em>资源，用于处理出于复制目的的请求。
+ *
  * A <em>jersey</em> resource that handles requests for replication purposes.
  *
  * @author Karthik Ranganathan
@@ -64,15 +66,20 @@ public class PeerReplicationResource {
     }
 
     /**
+     * 处理来自对等eureka节点的批处理复制事件。
+     *
      * Process batched replication events from peer eureka nodes.
+     *
+     * <p>批处理事件被委派给基础资源以生成{@link ReplicationListResponse}，其中包含对批处理事件的单独响应<p>
      *
      * <p>
      *  The batched events are delegated to underlying resources to generate a
      *  {@link ReplicationListResponse} containing the individual responses to the batched events
      * </p>
+     *                        对等eureka节点的复制事件列表
+     * @param replicationList The List of replication events from peer eureka nodes
      *
-     * @param replicationList
-     *            The List of replication events from peer eureka nodes
+     *          批处理响应，其中包含有关单个事件的响应的信息
      * @return A batched response containing the information about the responses of individual events
      */
     @Path("batch")

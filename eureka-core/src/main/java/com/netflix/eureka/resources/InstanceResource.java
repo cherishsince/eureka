@@ -44,6 +44,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * <em> jersey <em>资源，用于处理特定实例的操作。
+ *
  * A <em>jersey</em> resource that handles operations for a particular instance.
  *
  * @author Karthik Ranganathan, Greg Kim
@@ -68,6 +70,8 @@ public class InstanceResource {
     }
 
     /**
+     * 获取请求将返回有关实例的{@link InstanceInfo}的信息。
+     *
      * Get requests returns the information about the instance's
      * {@link InstanceInfo}.
      *
@@ -88,6 +92,8 @@ public class InstanceResource {
     }
 
     /**
+     * 来自客户端实例的续订租约的请求。
+     *
      * A put request for renewing lease from a client instance.
      *
      * @param isReplication
@@ -266,6 +272,8 @@ public class InstanceResource {
     }
 
     /**
+     * 处理实例的租赁取消。
+     *
      * Handles cancellation of leases for this particular instance.
      *
      * @param isReplication
@@ -275,12 +283,11 @@ public class InstanceResource {
      *         failure.
      */
     @DELETE
-    public Response cancelLease(
-            @HeaderParam(PeerEurekaNode.HEADER_REPLICATION) String isReplication) {
+    public Response cancelLease(@HeaderParam(PeerEurekaNode.HEADER_REPLICATION) String isReplication) {
         try {
-            boolean isSuccess = registry.cancel(app.getName(), id,
-                "true".equals(isReplication));
-
+            // 调用 PeerAwareInstanceRegistry 进行关闭
+            boolean isSuccess = registry.cancel(app.getName(), id, "true".equals(isReplication));
+            // 关闭是否成功
             if (isSuccess) {
                 logger.debug("Found (Cancel): {} - {}", app.getName(), id);
                 return Response.ok().build();
@@ -292,7 +299,6 @@ public class InstanceResource {
             logger.error("Error (cancel): {} - {}", app.getName(), id, e);
             return Response.serverError().build();
         }
-
     }
 
     private Response validateDirtyTimestamp(Long lastDirtyTimestamp,
