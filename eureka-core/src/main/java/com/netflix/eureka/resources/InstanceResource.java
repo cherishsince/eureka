@@ -16,13 +16,15 @@
 
 package com.netflix.eureka.resources;
 
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.HeaderParam;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
+import com.netflix.appinfo.InstanceInfo;
+import com.netflix.appinfo.InstanceInfo.InstanceStatus;
+import com.netflix.eureka.EurekaServerConfig;
+import com.netflix.eureka.cluster.PeerEurekaNode;
+import com.netflix.eureka.registry.PeerAwareInstanceRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
@@ -35,21 +37,12 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.netflix.appinfo.InstanceInfo;
-import com.netflix.appinfo.InstanceInfo.InstanceStatus;
-import com.netflix.eureka.EurekaServerConfig;
-import com.netflix.eureka.registry.PeerAwareInstanceRegistry;
-import com.netflix.eureka.cluster.PeerEurekaNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * <em> jersey <em>资源，用于处理特定实例的操作。
- *
+ * <p>
  * A <em>jersey</em> resource that handles operations for a particular instance.
  *
  * @author Karthik Ranganathan, Greg Kim
- *
  */
 @Produces({"application/xml", "application/json"})
 public class InstanceResource {
@@ -71,12 +64,12 @@ public class InstanceResource {
 
     /**
      * 获取请求将返回有关实例的{@link InstanceInfo}的信息。
-     *
+     * <p>
      * Get requests returns the information about the instance's
      * {@link InstanceInfo}.
      *
      * @return response containing information about the the instance's
-     *         {@link InstanceInfo}.
+     * {@link InstanceInfo}.
      */
     @GET
     public Response getInstanceInfo() {
@@ -93,20 +86,16 @@ public class InstanceResource {
 
     /**
      * 来自客户端实例的续订租约的请求。
-     *
+     * <p>
      * A put request for renewing lease from a client instance.
      *
-     * @param isReplication
-     *            a header parameter containing information whether this is
-     *            replicated from other nodes.
-     * @param overriddenStatus
-     *            overridden status if any.
-     * @param status
-     *            the {@link InstanceStatus} of the instance.
-     * @param lastDirtyTimestamp
-     *            last timestamp when this instance information was updated.
+     * @param isReplication      a header parameter containing information whether this is
+     *                           replicated from other nodes.
+     * @param overriddenStatus   overridden status if any.
+     * @param status             the {@link InstanceStatus} of the instance.
+     * @param lastDirtyTimestamp last timestamp when this instance information was updated.
      * @return response indicating whether the operation was a success or
-     *         failure.
+     * failure.
      */
     @PUT
     public Response renewLease(
@@ -142,6 +131,8 @@ public class InstanceResource {
     }
 
     /**
+     * 更新状态
+     * <p>
      * Handles {@link InstanceStatus} updates.
      *
      * <p>
@@ -151,15 +142,12 @@ public class InstanceResource {
      * receiving traffic.
      * </p>
      *
-     * @param newStatus
-     *            the new status of the instance.
-     * @param isReplication
-     *            a header parameter containing information whether this is
-     *            replicated from other nodes.
-     * @param lastDirtyTimestamp
-     *            last timestamp when this instance information was updated.
+     * @param newStatus          the new status of the instance.
+     * @param isReplication      a header parameter containing information whether this is
+     *                           replicated from other nodes.
+     * @param lastDirtyTimestamp last timestamp when this instance information was updated.
      * @return response indicating whether the operation was a success or
-     *         failure.
+     * failure.
      */
     @PUT
     @Path("status")
@@ -168,14 +156,15 @@ public class InstanceResource {
             @HeaderParam(PeerEurekaNode.HEADER_REPLICATION) String isReplication,
             @QueryParam("lastDirtyTimestamp") String lastDirtyTimestamp) {
         try {
+            // 检查 InstanceInfo 是否存在
             if (registry.getInstanceByAppAndId(app.getName(), id) == null) {
                 logger.warn("Instance not found: {}/{}", app.getName(), id);
                 return Response.status(Status.NOT_FOUND).build();
             }
+            // 更新状态
             boolean isSuccess = registry.statusUpdate(app.getName(), id,
                     InstanceStatus.valueOf(newStatus), lastDirtyTimestamp,
                     "true".equals(isReplication));
-
             if (isSuccess) {
                 logger.info("Status updated: {} - {} - {}", app.getName(), id, newStatus);
                 return Response.ok().build();
@@ -194,13 +183,11 @@ public class InstanceResource {
      * Removes status override for an instance, set with
      * {@link #statusUpdate(String, String, String)}.
      *
-     * @param isReplication
-     *            a header parameter containing information whether this is
-     *            replicated from other nodes.
-     * @param lastDirtyTimestamp
-     *            last timestamp when this instance information was updated.
+     * @param isReplication      a header parameter containing information whether this is
+     *                           replicated from other nodes.
+     * @param lastDirtyTimestamp last timestamp when this instance information was updated.
      * @return response indicating whether the operation was a success or
-     *         failure.
+     * failure.
      */
     @DELETE
     @Path("status")
@@ -232,11 +219,14 @@ public class InstanceResource {
     }
 
     /**
+     * 更新用户特定的元数据信息。如果密钥已经可用，则其值将被覆盖。如果没有，它将被添加。
+     * <p>
      * Updates user-specific metadata information. If the key is already available, its value will be overwritten.
      * If not, it will be added.
+     *
      * @param uriInfo - URI information generated by jersey.
      * @return response indicating whether the operation was a success or
-     *         failure.
+     * failure.
      */
     @PUT
     @Path("metadata")
@@ -251,6 +241,7 @@ public class InstanceResource {
             MultivaluedMap<String, String> queryParams = uriInfo.getQueryParameters();
             Set<Entry<String, List<String>>> entrySet = queryParams.entrySet();
             Map<String, String> metadataMap = instanceInfo.getMetadata();
+            // 元数据地图为空-创建新地图
             // Metadata map is empty - create a new map
             if (Collections.emptyMap().getClass().equals(metadataMap.getClass())) {
                 metadataMap = new ConcurrentHashMap<>();
@@ -258,6 +249,7 @@ public class InstanceResource {
                 builder.setMetadata(metadataMap);
                 instanceInfo = builder.build();
             }
+            // 将所有用户提供的条目添加到地图
             // Add all the user supplied entries to the map
             for (Entry<String, List<String>> entry : entrySet) {
                 metadataMap.put(entry.getKey(), entry.getValue().get(0));
@@ -273,14 +265,13 @@ public class InstanceResource {
 
     /**
      * 处理实例的租赁取消。
-     *
+     * <p>
      * Handles cancellation of leases for this particular instance.
      *
-     * @param isReplication
-     *            a header parameter containing information whether this is
-     *            replicated from other nodes.
+     * @param isReplication a header parameter containing information whether this is
+     *                      replicated from other nodes.
      * @return response indicating whether the operation was a success or
-     *         failure.
+     * failure.
      */
     @DELETE
     public Response cancelLease(@HeaderParam(PeerEurekaNode.HEADER_REPLICATION) String isReplication) {
