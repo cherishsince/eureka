@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
+ * 该规则检查是否有实例的替代，如果有，则返回它们。
+ *
  * This rule checks to see if we have overrides for an instance and if we do then we return those.
  *
  * Created by Nikos Michalakis on 7/13/16.

@@ -4,6 +4,8 @@ import com.netflix.appinfo.InstanceInfo;
 import com.netflix.eureka.registry.rule.InstanceStatusOverrideRule;
 
 /**
+ * 结果容器
+ *
  * Container for a result computed by an {@link InstanceStatusOverrideRule}.
  *
  * Created by Nikos Michalakis on 7/13/16.

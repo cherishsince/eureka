@@ -319,7 +319,7 @@ public class InstanceInfo {
         DOWN, // Do not send traffic- healthcheck callback failed （代表，已关闭） 不发送流量-运行状况检查回调失败
         STARTING, // Just about starting- initializations to be done - do not send traffic  即将开始-要完成初始化-不发送流量
         OUT_OF_SERVICE, // Intentionally shutdown for traffic  故意关闭流量
-        UNKNOWN;
+        UNKNOWN; // 未知
 
         public static InstanceStatus toEnum(String s) {
             if (s != null) {

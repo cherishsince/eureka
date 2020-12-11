@@ -103,7 +103,10 @@ public class InstanceResource {
             @QueryParam("overriddenstatus") String overriddenStatus,
             @QueryParam("status") String status,
             @QueryParam("lastDirtyTimestamp") String lastDirtyTimestamp) {
+        // <1> isReplication 标记是否是复制(集群节点复制的时候为 true)
+        // tip: 用户心跳续约这个为 false，然后会调用集群同步为true的时候，为true的时候就不会去同步到其他节点去
         boolean isFromReplicaNode = "true".equals(isReplication);
+        // <2> 调用心跳续约
         boolean isSuccess = registry.renew(app.getName(), id, isFromReplicaNode);
 
         // Not found in the registry, immediately ask for a register
@@ -124,6 +127,7 @@ public class InstanceResource {
                 registry.storeOverriddenStatusIfRequired(app.getAppName(), id, InstanceStatus.valueOf(overriddenStatus));
             }
         } else {
+            // <3> 续约成功
             response = Response.ok().build();
         }
         logger.debug("Found (Renew): {} - {}; reply status={}", app.getName(), id, response.getStatus());
