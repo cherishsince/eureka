@@ -101,7 +101,7 @@ public class ApplicationsResource {
     }
 
     /**
-     * 获取所有 Applications
+     * 获取所有 Applications（订阅，拉取服务信息的时候）
      *
      * Get information about all {@link com.netflix.discovery.shared.Applications}.
      *
@@ -110,6 +110,9 @@ public class ApplicationsResource {
      * @param acceptEncoding the accept header to indicate whether to serve compressed or uncompressed data.
      * @param eurekaAccept an eureka accept extension, see {@link com.netflix.appinfo.EurekaAccept}
      * @param uriInfo the {@link java.net.URI} information of the request made.
+     *
+     *                    以逗号分隔的远程区域列表，还将从中返回实例。从远程区域返回的应用程序可以限制为
+     *                    {@link EurekaServerConfig#getRemoteRegionAppWhitelist(String)}返回的应用程序
      * @param regionsStr A comma separated list of remote regions from which the instances will also be returned.
      *                   The applications returned from the remote region can be limited to the applications
      *                   returned by {@link EurekaServerConfig#getRemoteRegionAppWhitelist(String)}
@@ -124,7 +127,7 @@ public class ApplicationsResource {
                                   @HeaderParam(EurekaAccept.HTTP_X_EUREKA_ACCEPT) String eurekaAccept,
                                   @Context UriInfo uriInfo,
                                   @Nullable @QueryParam("regions") String regionsStr) {
-
+        // tip: 这个是 云服务器
         boolean isRemoteRegionRequested = null != regionsStr && !regionsStr.isEmpty();
         String[] regions = null;
         if (!isRemoteRegionRequested) {
@@ -135,13 +138,16 @@ public class ApplicationsResource {
             EurekaMonitors.GET_ALL_WITH_REMOTE_REGIONS.increment();
         }
 
+        // 检查服务器是否允许访问注册表。如果服务器由于各种原因尚未准备好服务流量，则可以限制访问。
         // Check if the server allows the access to the registry. The server can
         // restrict access if it is not
         // ready to serve traffic depending on various reasons.
         if (!registry.shouldAllowAccess(isRemoteRegionRequested)) {
             return Response.status(Status.FORBIDDEN).build();
         }
+        // 设置当前请求的版本号，里面是一个 threadLocal
         CurrentRequestVersion.set(Version.toEnum(version));
+        // 请求返回类型，默认是 application/json
         KeyType keyType = Key.KeyType.JSON;
         String returnMediaType = MediaType.APPLICATION_JSON;
         if (acceptHeader == null || !acceptHeader.contains(HEADER_JSON_VALUE)) {
@@ -149,11 +155,16 @@ public class ApplicationsResource {
             returnMediaType = MediaType.APPLICATION_XML;
         }
 
+        // tip: cacheKey 用于 ResponseCacheImpl 缓存使用
+        // 如下业务：是采用 responseCache 实现类是 ResponseCacheImpl，就是去缓存中获取
+
+        // 生成cachekey
         Key cacheKey = new Key(Key.EntityType.Application,
                 ResponseCacheImpl.ALL_APPS,
                 keyType, CurrentRequestVersion.get(), EurekaAccept.fromString(eurekaAccept), regions
         );
 
+        // tip: 响应请求，这里会动态的适配，application/json 和 xml 格式响应(eureka 使用的不是 spring mvc 所以和我们spring的方式不一样)
         Response response;
         if (acceptEncoding != null && acceptEncoding.contains(HEADER_GZIP_VALUE)) {
             response = Response.ok(responseCache.getGZIP(cacheKey))
@@ -164,6 +175,7 @@ public class ApplicationsResource {
             response = Response.ok(responseCache.get(cacheKey))
                     .build();
         }
+        // 删除version
         CurrentRequestVersion.remove();
         return response;
     }

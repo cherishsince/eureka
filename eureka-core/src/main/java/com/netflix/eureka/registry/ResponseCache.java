@@ -15,6 +15,8 @@ public interface ResponseCache {
     AtomicLong getVersionDeltaWithRegions();
 
     /**
+     * 获取有关应用程序的缓存信息。
+     *
      * Get the cached information about applications.
      *
      * <p>

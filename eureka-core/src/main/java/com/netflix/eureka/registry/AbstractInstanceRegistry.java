@@ -65,7 +65,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     // 注册的实例
     private final ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>> registry
             = new ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>>();
-    // 区域名称VS远程注册表
+    // 区域名称VS远程注册表(一般是另外的集群，或者是云服务商的集群)
     protected Map<String, RemoteRegionRegistry> regionNameVSRemoteRegistry = new HashMap<String, RemoteRegionRegistry>();
     // 保存的是 服务的状态
     protected final ConcurrentMap<String, InstanceStatus> overriddenInstanceStatusMap = CacheBuilder
@@ -770,6 +770,8 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     /**
+     * 在此实例注册表中获取所有应用程序，如果Eureka配置允许，则退回到其他区域。
+     *
      * Get all applications in this instance registry, falling back to other regions if allowed in the Eureka config.
      *
      * @return the list of all known applications
@@ -778,8 +780,10 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     public Applications getApplications() {
         boolean disableTransparentFallback = serverConfig.disableTransparentFallbackToOtherRegion();
         if (disableTransparentFallback) {
+            // 本地获取 applications
             return getApplicationsFromLocalRegionOnly();
         } else {
+            // 云服务器的 eureka 集群中获取 applications
             return getApplicationsFromAllRemoteRegions();  // Behavior of falling back to remote region can be disabled.
         }
     }
@@ -818,22 +822,26 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      * from remote regions can be only for certain whitelisted apps as explained above.
      */
     public Applications getApplicationsFromMultipleRegions(String[] remoteRegions) {
-
+        // 是否包含 远程注册服务
         boolean includeRemoteRegion = null != remoteRegions && remoteRegions.length != 0;
 
         logger.debug("Fetching applications registry with remote regions: {}, Regions argument {}",
                 includeRemoteRegion, remoteRegions);
-
+        // 计数+1
         if (includeRemoteRegion) {
             GET_ALL_WITH_REMOTE_REGIONS_CACHE_MISS.increment();
         } else {
             GET_ALL_CACHE_MISS.increment();
         }
+        // 声明返回的 Applications 容器，version 默认1开始
         Applications apps = new Applications();
         apps.setVersion(1L);
+
+        // tip：这里是处理 本地的register
+        // tip：本地的 register + includeRemoteRegion 才是最终更新的
+
         for (Entry<String, Map<String, Lease<InstanceInfo>>> entry : registry.entrySet()) {
             Application app = null;
-
             if (entry.getValue() != null) {
                 for (Entry<String, Lease<InstanceInfo>> stringLeaseEntry : entry.getValue().entrySet()) {
                     Lease<InstanceInfo> lease = stringLeaseEntry.getValue();
@@ -843,16 +851,22 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                     app.addInstance(decorateInstanceInfo(lease));
                 }
             }
+
             if (app != null) {
                 apps.addApplication(app);
             }
         }
+
+        // tip：这里是处理 远程eurekaServer
         if (includeRemoteRegion) {
             for (String remoteRegion : remoteRegions) {
+                // 远程注册中心信息(这里是一个 map，因为远程注册的信息也是定时更新的，采用的也是缓存)
                 RemoteRegionRegistry remoteRegistry = regionNameVSRemoteRegistry.get(remoteRegion);
                 if (null != remoteRegistry) {
+                    // 获取远程注册中心的，applications 信息
                     Applications remoteApps = remoteRegistry.getApplications();
                     for (Application application : remoteApps.getRegisteredApplications()) {
+                        // 应该从远程注册表获取
                         if (shouldFetchFromRemoteRegistry(application.getName(), remoteRegion)) {
                             logger.info("Application {}  fetched from the remote region {}",
                                     application.getName(), remoteRegion);
@@ -941,6 +955,8 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     /**
+     * 获取增量信息
+     *
      * Get the registry information about the delta changes. The deltas are
      * cached for a window specified by
      * {@link EurekaServerConfig#getRetentionTimeInMSInDeltaQueue()}. Subsequent
