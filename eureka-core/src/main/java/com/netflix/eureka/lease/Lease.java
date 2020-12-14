@@ -45,7 +45,7 @@ public class Lease<T> {
 
     public static final int DEFAULT_DURATION_IN_SECS = 90;
 
-    // hodler 保存的是一个 list<InstanceInfo> 信息
+    // holder 保存的是一个 InstanceInfo 信息
     private T holder;
     private long evictionTimestamp;
     private long registrationTimestamp;
@@ -63,19 +63,24 @@ public class Lease<T> {
     }
 
     /**
+     * 续订租约，如果在注册过程中由关联的{@link T}指定了续约期限，
+     * 则使用续约期限，否则默认续约期限为{@link #DEFAULT_DURATION_IN_SECS}。
+     *
      * Renew the lease, use renewal duration if it was specified by the
      * associated {@link T} during registration, otherwise default duration is
      * {@link #DEFAULT_DURATION_IN_SECS}.
      */
     public void renew() {
         lastUpdateTimestamp = System.currentTimeMillis() + duration;
-
     }
 
     /**
+     * 通过更新驱逐时间来取消租约。
+     *
      * Cancels the lease by updating the eviction time.
      */
     public void cancel() {
+        // 更新驱逐时间
         if (evictionTimestamp <= 0) {
             evictionTimestamp = System.currentTimeMillis();
         }
@@ -106,16 +111,28 @@ public class Lease<T> {
     }
 
     /**
+     * 检查给定的{@link com.netflix.appinfo.InstanceInfo}的租约是否已到期。
+     *
      * Checks if the lease of a given {@link com.netflix.appinfo.InstanceInfo} has expired or not.
+     *
+     * 请注意，由于renew（）做错了事，并将lastUpdateTimestamp设置为+ duration多于应有的时间，因此有效期实际上是2个持续时间。
+     * 这是一个小错误，仅会影响不正常关闭的实例。可能对现有用法产生广泛影响，但不会固定。
      *
      * Note that due to renew() doing the 'wrong" thing and setting lastUpdateTimestamp to +duration more than
      * what it should be, the expiry will actually be 2 * duration. This is a minor bug and should only affect
      * instances that ungracefully shutdown. Due to possible wide ranging impact to existing usage, this will
      * not be fixed.
-     *
+     *                          添加到租约评估中的任何其他租约时间（以毫秒为单位）。
      * @param additionalLeaseMs any additional lease time to add to the lease evaluation in ms.
      */
     public boolean isExpired(long additionalLeaseMs) {
+        /**
+         * tip: 注意: 由于{@link #cancel()} 里面 lastUpdateTimestamp = 当前时间 + 续约时间，应该叫过期时间，而不是最后更新时间
+         */
+
+        // tip: additionalLeaseMs 这是一个服务器同步 预计消耗的时间(只是一个预估时间)
+        // 剔除时间大于0(大于0就需要剔除) = 过期
+        // 当前时间 > 过期时间 = 过期
         return (evictionTimestamp > 0 || System.currentTimeMillis() > (lastUpdateTimestamp + duration + additionalLeaseMs));
     }
 
@@ -157,6 +174,8 @@ public class Lease<T> {
     }
 
     /**
+     * 返回租约的持有人。
+     *
      * Returns the holder of the lease.
      */
     public T getHolder() {

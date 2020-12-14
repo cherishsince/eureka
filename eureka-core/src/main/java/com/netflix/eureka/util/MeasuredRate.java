@@ -15,26 +15,39 @@
  */
 package com.netflix.eureka.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
+ * 实用程序类，用于获取过去X毫秒内的计数。
+ * <p>
  * Utility class for getting a count in last X milliseconds.
  *
  * @author Karthik Ranganathan,Greg Kim
  */
 public class MeasuredRate {
     private static final Logger logger = LoggerFactory.getLogger(MeasuredRate.class);
+    /**
+     * 上一次统计的次数
+     */
     private final AtomicLong lastBucket = new AtomicLong(0);
+    /**
+     * 当前统计的次数
+     */
     private final AtomicLong currentBucket = new AtomicLong(0);
 
     private final long sampleInterval;
+    /**
+     * 定时器
+     */
     private final Timer timer;
-
+    /**
+     * 是否激活(start 的时候激活)
+     */
     private volatile boolean isActive;
 
     /**
@@ -53,6 +66,7 @@ public class MeasuredRate {
                 @Override
                 public void run() {
                     try {
+                        // 将当前存储桶清零，并保存到 lastBucket
                         // Zero out the current bucket.
                         lastBucket.set(currentBucket.getAndSet(0));
                     } catch (Throwable e) {
@@ -60,7 +74,6 @@ public class MeasuredRate {
                     }
                 }
             }, sampleInterval, sampleInterval);
-
             isActive = true;
         }
     }
@@ -73,6 +86,8 @@ public class MeasuredRate {
     }
 
     /**
+     * 获取上一次统计的 count
+     * <p>
      * Returns the count in the last sample interval.
      */
     public long getCount() {
@@ -80,6 +95,8 @@ public class MeasuredRate {
     }
 
     /**
+     * 次数 +1
+     * <p>
      * Increments the count in the current sample interval.
      */
     public void increment() {

@@ -113,6 +113,9 @@ public interface EurekaServerConfig {
     boolean shouldEnableSelfPreservation();
 
     /**
+     * 在{@link #getRenewalThresholdUpdateIntervalMs()}指定的时间段内，客户端期望的最小续订百分比。
+     * 如果续订下降到阈值以下，则在启用{@link #shouldEnableSelfPreservation()}的情况下，失效将被禁用。
+     *
      * The minimum percentage of renewals that is expected from the clients in
      * the period specified by {@link #getRenewalThresholdUpdateIntervalMs()}.
      * If the renewals drop below the threshold, the expirations are disabled if
@@ -258,6 +261,8 @@ public interface EurekaServerConfig {
     long getDeltaRetentionTimerIntervalInMs();
 
     /**
+     * 获取终止实例的任务应唤醒并运行的时间间隔。
+     *
      * Get the time interval with which the task that expires instances should
      * wake up and run.
      *
@@ -538,6 +543,10 @@ public interface EurekaServerConfig {
     String[] getRemoteRegionUrls();
 
     /**
+     * 返回必须从传递的远程区域中检索到的应用程序的列表。
+     * <br>此列表可以为<code> null <code>，这意味着不应对该区域的应用程序应用任何过滤，即必须返回所有应用程序。
+     * <br>还可以配置全局白名单，该白名单可以在没有设置可用的区域时使用，可以通过将<code> null <code>传递给此方法来获得这种白名单。
+     *
      * Returns a list of applications that must be retrieved from the passed remote region. <br/>
      * This list can be <code>null</code> which means that no filtering should be applied on the applications
      * for this region i.e. all applications must be returned. <br/>
@@ -577,6 +586,8 @@ public interface EurekaServerConfig {
     String getRemoteRegionTrustStorePassword();
 
     /**
+     * 如果本地区域中没有该应用程序的实例，则将禁用回退到远程区域中的应用程序的旧行为（如果已配置）。
+     *
      * Old behavior of fallback to applications in the remote region (if configured) if there are no instances of that
      * application in the local region, will be disabled.
      *
@@ -585,6 +596,8 @@ public interface EurekaServerConfig {
     boolean disableTransparentFallbackToOtherRegion();
 
     /**
+     * 指示是否应批处理群集节点之间的复制以提高网络效率。
+     *
      * Indicates whether the replication between cluster nodes should be batched for network efficiency.
      * @return {@code true} if the replication needs to be batched.
      */

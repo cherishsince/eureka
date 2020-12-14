@@ -939,6 +939,8 @@ public class DiscoveryClient implements EurekaClient {
     }
 
     /**
+     * 关闭Eureka客户端。还将注销请求发送到eureka服务器。
+     * <p>
      * Shuts down Eureka Client. Also sends a deregistration request to the
      * eureka server.
      */
@@ -951,26 +953,28 @@ public class DiscoveryClient implements EurekaClient {
             if (statusChangeListener != null && applicationInfoManager != null) {
                 applicationInfoManager.unregisterStatusChangeListener(statusChangeListener.getId());
             }
-
+            // 关闭任务调度
             cancelScheduledTasks();
-
+            // tip: appInfo 这里指的是，instanceInfo
             // If APPINFO was registered
             if (applicationInfoManager != null
                     && clientConfig.shouldRegisterWithEureka()
                     && clientConfig.shouldUnregisterOnShutdown()) {
+                // 当前实例设置为 down 状态
                 applicationInfoManager.setInstanceStatus(InstanceStatus.DOWN);
+                // 发送请求，取消注册
                 unregister();
             }
-
+            // 关闭 eurekaTransport
             if (eurekaTransport != null) {
                 eurekaTransport.shutdown();
             }
-
+            // 关闭心跳监听
             heartbeatStalenessMonitor.shutdown();
+            // 关闭注册监听
             registryStalenessMonitor.shutdown();
-
+            // 取消监听
             Monitors.unregisterObject(this);
-
             logger.info("Completed shut down of DiscoveryClient");
         }
     }
@@ -1154,7 +1158,7 @@ public class DiscoveryClient implements EurekaClient {
 
     /**
      * 增量更新
-     *
+     * <p>
      * Get the delta registry information from the eureka server and update it locally.
      * When applying the delta, the following flow is observed:
      * <p>
@@ -1234,7 +1238,7 @@ public class DiscoveryClient implements EurekaClient {
 
     /**
      * 协调eureka服务器和客户端注册表信息，并记录差异（如果有）。进行对帐时，遵循以下流程：
-     *
+     * <p>
      * Reconcile the eureka server and client registry information and logs the differences if any.
      * When reconciling, the following flow is observed:
      * <p>
@@ -1283,7 +1287,7 @@ public class DiscoveryClient implements EurekaClient {
 
     /**
      * 将从eureka服务器获取的 “增量信息” 更新到本地缓存中。
-     *
+     * <p>
      * Updates the delta information fetches from the eureka server into the
      * local cache.
      *
@@ -1514,6 +1518,8 @@ public class DiscoveryClient implements EurekaClient {
     }
 
     /**
+     * 刷新当前的本地instanceInfo。请注意，在观察到更改的有效刷新之后，instanceInfo上的isDirty标志设置为true
+     * <p>
      * Refresh the current local instanceInfo. Note that after a valid refresh where changes are observed, the
      * isDirty flag on the instanceInfo is set to true
      */
@@ -1535,10 +1541,12 @@ public class DiscoveryClient implements EurekaClient {
     }
 
     /**
+     * 在给定时间间隔内更新租约的心跳任务。
+     * <p>
      * The heartbeat task that renews the lease in the given intervals.
      */
     private class HeartbeatThread implements Runnable {
-
+        // tip: 心跳调用的就是 renew 续订动作
         public void run() {
             if (renew()) {
                 lastSuccessfulHeartbeatTimestamp = System.currentTimeMillis();

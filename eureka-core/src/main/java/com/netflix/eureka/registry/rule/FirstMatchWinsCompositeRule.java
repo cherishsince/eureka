@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 该规则采用规则的有序列表，并返回第一个匹配项的结果或{@link AlwaysMatchInstanceStatusRule}的结果。
+ *
  * This rule takes an ordered list of rules and returns the result of the first match or the
  * result of the {@link AlwaysMatchInstanceStatusRule}.
  *

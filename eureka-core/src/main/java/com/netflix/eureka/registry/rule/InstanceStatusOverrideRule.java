@@ -5,6 +5,8 @@ import com.netflix.eureka.lease.Lease;
 import com.netflix.eureka.registry.AbstractInstanceRegistry;
 
 /**
+ * 如果匹配的单个规则将返回实例状态。想法是使用此类规则的有序列表，并选择匹配的第一个结果。
+ *
  * A single rule that if matched it returns an instance status.
  * The idea is to use an ordered list of such rules and pick the first result that matches.
  *
@@ -16,6 +18,8 @@ import com.netflix.eureka.registry.AbstractInstanceRegistry;
 public interface InstanceStatusOverrideRule {
 
     /**
+     * 符合此规则。
+     *
      * Match this rule.
      *
      * @param instanceInfo The instance info whose status we care about.

@@ -168,7 +168,7 @@ public class ApplicationResource {
         } else if (info.getDataCenterInfo().getName() == null) {
             return Response.status(400).entity("Missing dataCenterInfo Name").build();
         }
-
+        // tip: 这里是公有云 数据中心(Netflix, Amazon, MyOwn)
         // 处理客户端可能在数据缺失的情况下向错误的DataCenterInfo注册的情况
         // handle cases where clients may be registering with bad DataCenterInfo with missing data
         DataCenterInfo dataCenterInfo = info.getDataCenterInfo();
