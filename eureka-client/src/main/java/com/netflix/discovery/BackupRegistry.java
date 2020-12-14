@@ -20,6 +20,10 @@ import com.google.inject.ImplementedBy;
 import com.netflix.discovery.shared.Applications;
 
 /**
+ * 为<em>eureka</em>客户提供一个简单的合同
+ * 注册表信息，以防eureka客户端无法检索此信息
+ * 来自任何<em>eureka</em>服务器的信息。
+ *
  * A simple contract for <em>eureka</em> clients to fallback for getting
  * registry information in case eureka clients are unable to retrieve this
  * information from any of the <em>eureka</em> servers.

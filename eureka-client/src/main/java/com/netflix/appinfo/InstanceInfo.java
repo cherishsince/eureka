@@ -42,6 +42,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * （服务注册的信息）
+ *
+ * 保存注册所需信息的类
+ * <tt>Eureka服务器</tt>并被其他组件发现。
+ *
  * The class that holds information required for registration with
  * <tt>Eureka Server</tt> and to be discovered by other components.
  * <p>
@@ -84,50 +89,72 @@ public class InstanceInfo {
 
     private static final Logger logger = LoggerFactory.getLogger(InstanceInfo.class);
 
+    /**
+     * 默认端口号 7001
+     */
     public static final int DEFAULT_PORT = 7001;
+    // 默认端口号 7002
     public static final int DEFAULT_SECURE_PORT = 7002;
     public static final int DEFAULT_COUNTRY_ID = 1; // US
 
+    // 注册到 eureka server 上面的名称(192.168.0.101:demo-provider:18080)
+    // ${spring.cloud.client.ipAddress}:${spring.application.name}:${spring.application.instance_id:${server.port}}
     // The (fixed) instanceId for this instanceInfo. This should be unique within the scope of the appName.
     private volatile String instanceId;
 
+    // 配置的 DEMO-PROVIDER(会转换为大写)
     private volatile String appName;
+    // 默认group为null
     @Auto
     private volatile String appGroupName;
-
+    /**
+     * ip地址 192.168.0.101
+     */
     private volatile String ipAddr;
 
     private static final String SID_DEFAULT = "na";
     @Deprecated
     private volatile String sid = SID_DEFAULT;
-
+    // 获取的是 server.port，默认 7001
     private volatile int port = DEFAULT_PORT;
+    // 保护端口号
     private volatile int securePort = DEFAULT_SECURE_PORT;
 
+    // http://192.168.0.101:18080/
     @Auto
     private volatile String homePageUrl;
+    // http://192.168.0.101:18080/actuator/info
     @Auto
     private volatile String statusPageUrl;
+    // http://192.168.0.101:18080/actuator/health
     @Auto
     private volatile String healthCheckUrl;
     @Auto
     private volatile String secureHealthCheckUrl;
+    // demo-provider
     @Auto
     private volatile String vipAddress;
+    // demo-provider
     @Auto
     private volatile String secureVipAddress;
+    // /actuator/info
     @XStreamOmitField
     private String statusPageRelativeUrl;
+    // http://192.168.0.101:18080/actuator/info
     @XStreamOmitField
     private String statusPageExplicitUrl;
+    // /actuator/health
     @XStreamOmitField
     private String healthCheckRelativeUrl;
     @XStreamOmitField
     private String healthCheckSecureExplicitUrl;
+    // demo-provider
     @XStreamOmitField
     private String vipAddressUnresolved;
+    // demo-provider
     @XStreamOmitField
     private String secureVipAddressUnresolved;
+    // http://192.168.0.101:18080/actuator/health
     @XStreamOmitField
     private String healthCheckExplicitUrl;
     @Deprecated
@@ -145,19 +172,25 @@ public class InstanceInfo {
     private volatile Boolean isCoordinatingDiscoveryServer = Boolean.FALSE;
     @XStreamAlias("metadata")
     private volatile Map<String, String> metadata;
+    // 最后更新时间（初始化的时候是 当前时间）
     @Auto
     private volatile Long lastUpdatedTimestamp;
+    // 最后脏数据时间
     @Auto
     private volatile Long lastDirtyTimestamp;
+    // 注册时 add(里面有 add delete modify)
     @Auto
     private volatile ActionType actionType;
     @Auto
     private volatile String asgName;
+    // 默认是 unknown 未知的，从服务器拉取注册信息后，会和服务器版本保持一致
     private String version = VERSION_UNKNOWN;
 
     private InstanceInfo() {
         this.metadata = new ConcurrentHashMap<String, String>();
+        // 最后更新时间
         this.lastUpdatedTimestamp = System.currentTimeMillis();
+        // 最后脏数据时间
         this.lastDirtyTimestamp = lastUpdatedTimestamp;
     }
 

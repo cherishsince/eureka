@@ -28,6 +28,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * (app信息，InstanceInfo 实例信息、EurekaInstanceConfig 配置信息)
+ *
+ * 初始化注册所需信息的类
+ * <tt>Eureka服务器</tt>并被其他组件发现。
+ *
  * The class that initializes information required for registration with
  * <tt>Eureka Server</tt> and to be discovered by other components.
  *
