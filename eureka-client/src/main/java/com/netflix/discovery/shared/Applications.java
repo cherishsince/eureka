@@ -203,6 +203,8 @@ public class Applications {
     }
 
     /**
+     * 由eureka服务器使用。不得外用。
+     *
      * Used by the eureka server. Not for external use.
      *
      * @param hashCode
@@ -225,6 +227,8 @@ public class Applications {
     }
 
     /**
+     * 获取此<em> applications <em>实例的哈希码。用于比较eureka服务器和eureka客户端之间的实例。
+     *
      * Gets the hash code for this <em>applications</em> instance. Used for
      * comparison of instances between eureka server and eureka client.
      *
@@ -234,7 +238,9 @@ public class Applications {
     @JsonIgnore
     public String getReconcileHashCode() {
         TreeMap<String, AtomicInteger> instanceCountMap = new TreeMap<String, AtomicInteger>();
+        // 统计数量
         populateInstanceCountMap(instanceCountMap);
+        // 生成 hashCode
         return getReconcileHashCode(instanceCountMap);
     }
 
@@ -246,6 +252,8 @@ public class Applications {
      *            the map to populate
      */
     public void populateInstanceCountMap(Map<String, AtomicInteger> instanceCountMap) {
+        // tip: 就是将每个 application 中的结群节点，count 也统计出来
+        // 然后 instanceCountMap 保存的时，application -> count 数量
         for (Application app : this.getRegisteredApplications()) {
             for (InstanceInfo info : app.getInstancesAsIsFromEureka()) {
                 AtomicInteger instanceCount = instanceCountMap.computeIfAbsent(info.getStatus().name(),
@@ -267,7 +275,10 @@ public class Applications {
     public static String getReconcileHashCode(Map<String, AtomicInteger> instanceCountMap) {
         StringBuilder reconcileHashCode = new StringBuilder(75);
         for (Map.Entry<String, AtomicInteger> mapEntry : instanceCountMap.entrySet()) {
-            reconcileHashCode.append(mapEntry.getKey()).append(STATUS_DELIMITER).append(mapEntry.getValue().get())
+            // tip：拼接格式 appName + "_" + count + "_" = appName_数量_
+            reconcileHashCode.append(mapEntry.getKey())
+                    .append(STATUS_DELIMITER)
+                    .append(mapEntry.getValue().get())
                     .append(STATUS_DELIMITER);
         }
         return reconcileHashCode.toString();

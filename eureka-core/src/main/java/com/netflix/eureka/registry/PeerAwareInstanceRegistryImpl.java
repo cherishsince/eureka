@@ -165,6 +165,8 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 执行所有清理和关闭操作。
+     *
      * Perform all cleanup and shutdown operations.
      */
     @Override
@@ -489,10 +491,15 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
 
     @Override
     public boolean isLeaseExpirationEnabled() {
+        // <1> 关闭自我保护进入
         if (!isSelfPreservationModeEnabled()) {
+            // 自保留模式被禁用，因此允许实例过期。
             // The self preservation mode is disabled, hence allowing the instances to expire.
             return true;
         }
+        // <2>
+        // getNumOfRenewsInLastMin: 续租每分钟次数
+        // numberOfRenewsPerMinThreshold: 每分钟阈值的续订次数(根据默认 85%计算，100个实例至少需要85个心跳次数)
         return numberOfRenewsPerMinThreshold > 0 && getNumOfRenewsInLastMin() > numberOfRenewsPerMinThreshold;
     }
 
@@ -581,6 +588,8 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 获取最近一分钟的<em>续订<em>数量。
+     *
      * Gets the number of <em>renewals</em> in the last minute.
      *
      * @return a long value representing the number of <em>renewals</em> in the last minute.
@@ -636,6 +645,8 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 将所有eureka操作复制到对等eureka节点，但复制到该节点的流量除外。
+     *
      * Replicates all eureka actions to peer eureka nodes except for replication
      * traffic to this node.
      *
@@ -646,6 +657,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         Stopwatch tracer = action.getTimer().start();
         try {
             if (isReplication) {
+                // 复制次数 +1
                 numberOfReplicationsLastMin.increment();
             }
             // If it is a replication already, do not replicate again as this will create a poison replication

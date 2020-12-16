@@ -93,7 +93,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     private final AtomicReference<EvictionTask> evictionTaskRef = new AtomicReference<EvictionTask>();
 
     protected String[] allKnownRemoteRegions = EMPTY_STR_ARRAY;
-    // eureka server 阀值信息
+    // 每分钟阈值的续订次数(根据默认 85%计算，100个实例至少需要85个心跳次数)
     protected volatile int numberOfRenewsPerMinThreshold;
     // 客户端发送续约，预期的一个数量(就是客户端数量)
     protected volatile int expectedNumberOfClientsSendingRenews;
@@ -656,7 +656,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
     public void evict(long additionalLeaseMs) {
         logger.debug("Running the evict task");
-        // 没有开启驱逐，就直接 return
+        // <0> 是否启用续租到期处理
         if (!isLeaseExpirationEnabled()) {
             logger.debug("DS: lease expiration is currently disabled.");
             return;
@@ -780,10 +780,10 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     public Applications getApplications() {
         boolean disableTransparentFallback = serverConfig.disableTransparentFallbackToOtherRegion();
         if (disableTransparentFallback) {
-            // 本地获取 applications
+            // <1> 本地获取 applications
             return getApplicationsFromLocalRegionOnly();
         } else {
-            // 云服务器的 eureka 集群中获取 applications
+            // <2> 云服务器的 eureka 集群中获取 applications
             return getApplicationsFromAllRemoteRegions();  // Behavior of falling back to remote region can be disabled.
         }
     }
@@ -915,21 +915,19 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      */
     @Deprecated
     public Applications getApplications(boolean includeRemoteRegion) {
+        // 全部缓存未命中 +1
         GET_ALL_CACHE_MISS.increment();
         Applications apps = new Applications();
         apps.setVersion(1L);
+        // 本地的 applications 信息
         for (Entry<String, Map<String, Lease<InstanceInfo>>> entry : registry.entrySet()) {
             Application app = null;
-
             if (entry.getValue() != null) {
                 for (Entry<String, Lease<InstanceInfo>> stringLeaseEntry : entry.getValue().entrySet()) {
-
                     Lease<InstanceInfo> lease = stringLeaseEntry.getValue();
-
                     if (app == null) {
                         app = new Application(lease.getHolder().getAppName());
                     }
-
                     app.addInstance(decorateInstanceInfo(lease));
                 }
             }
@@ -937,6 +935,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 apps.addApplication(app);
             }
         }
+        // tip: includeRemoteRegion为 true，就也返回远程区域的 application信息
         if (includeRemoteRegion) {
             for (RemoteRegionRegistry remoteRegistry : this.regionNameVSRemoteRegistry.values()) {
                 Applications applications = remoteRegistry.getApplications();
@@ -950,6 +949,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 }
             }
         }
+        // apps.getReconcileHashCode() 生成 applications hashcode
         apps.setAppsHashCode(apps.getReconcileHashCode());
         return apps;
     }
@@ -970,37 +970,45 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      */
     @Deprecated
     public Applications getApplicationDeltas() {
+        // <1> 缓存未命中计数 +1
         GET_ALL_CACHE_MISS_DELTA.increment();
+        // <2> Applications 应用信息
         Applications apps = new Applications();
         apps.setVersion(responseCache.getVersionDelta().get());
         Map<String, Application> applicationInstancesMap = new HashMap<String, Application>();
+        // <3> 获取写锁，服务注册的时候获取的是都锁，这个时候就不能注册了
         write.lock();
         try {
+            // <4> recentlyChangedQueue 是一个最近修改的队列，默认保留3三分钟
             Iterator<RecentlyChangedItem> iter = this.recentlyChangedQueue.iterator();
             logger.debug("The number of elements in the delta queue is : {}",
                     this.recentlyChangedQueue.size());
             while (iter.hasNext()) {
+                // 获取续约信息
                 Lease<InstanceInfo> lease = iter.next().getLeaseInfo();
                 InstanceInfo instanceInfo = lease.getHolder();
                 logger.debug(
                         "The instance id {} is found with status {} and actiontype {}",
                         instanceInfo.getId(), instanceInfo.getStatus().name(), instanceInfo.getActionType().name());
-                Application app = applicationInstancesMap.get(instanceInfo
-                        .getAppName());
+                // tip: applicationInstancesMap 用于去重
+                // applicationInstancesMap 如果为空的时候，才进行添加
+                Application app = applicationInstancesMap.get(instanceInfo.getAppName());
                 if (app == null) {
                     app = new Application(instanceInfo.getAppName());
                     applicationInstancesMap.put(instanceInfo.getAppName(), app);
                     apps.addApplication(app);
                 }
+                // 添加实例信息
                 app.addInstance(new InstanceInfo(decorateInstanceInfo(lease)));
             }
 
+            // <5> 是否禁用失败回退（回退就会调用vip地址）
             boolean disableTransparentFallback = serverConfig.disableTransparentFallbackToOtherRegion();
-
+            // <6> 没有禁用进入，然后调用vip注册的信息
             if (!disableTransparentFallback) {
                 Applications allAppsInLocalRegion = getApplications(false);
-
                 for (RemoteRegionRegistry remoteRegistry : this.regionNameVSRemoteRegistry.values()) {
+                    // 远程注册中心，增量的信息
                     Applications applications = remoteRegistry.getApplicationDeltas();
                     for (Application application : applications.getRegisteredApplications()) {
                         Application appInLocalRegistry =
@@ -1011,11 +1019,13 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                     }
                 }
             }
-
+            //
             Applications allApps = getApplications(!disableTransparentFallback);
+            // <7> 生成 HashCode
             apps.setAppsHashCode(allApps.getReconcileHashCode());
             return apps;
         } finally {
+            // 释放锁
             write.unlock();
         }
     }
@@ -1229,6 +1239,8 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     /**
+     * 续租每分钟次数
+     *
      * Servo route; do not call.
      *
      * @return servo data
@@ -1289,11 +1301,12 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         // tip：这里计算的是 eureka server 当前的阀值
         // tip: 默认 getRenewalPercentThreshold 最大为 85%
 
-        // tip: 客户端心跳时间(默认30秒) / 60 = 2
+        // tip: 客户端心跳时间(默认30秒) / 60 = 2(服务端预期能够在60秒收到客户端几次心跳)
         double d1 = (60.0 / serverConfig.getExpectedClientRenewalIntervalSeconds());
-        // tip: 客户端链接数量 * d1
+        // tip: 客户端发送续约，预期的一个数量(就是客户端数量) * 每分钟能够收到几次心跳
         double d2 = this.expectedNumberOfClientsSendingRenews * d1;
-        // tip: eureka server 配置的百分比阀值，计算每分钟阀值(d2 * eurekaServer配置的百分比阀值)
+        // tip: eureka server 配置的百分比阀值(85%)，计算每分钟阀值(d2 * eurekaServer配置的百分比阀值)
+        // tip: 如果预期为 100 个心跳之 * 0.85 = 85个心跳
         this.numberOfRenewsPerMinThreshold = (int) (d2 * serverConfig.getRenewalPercentThreshold());
 //        this.numberOfRenewsPerMinThreshold =
 //                (int) (this.expectedNumberOfClientsSendingRenews

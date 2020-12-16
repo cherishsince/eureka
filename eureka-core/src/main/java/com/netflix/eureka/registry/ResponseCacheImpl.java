@@ -149,8 +149,9 @@ public class ResponseCacheImpl implements ResponseCache {
         // guava 的 LoadingCache
         this.readWriteCacheMap =
                 CacheBuilder.newBuilder().initialCapacity(serverConfig.getInitialCapacityOfResponseCache())
+                        // <1> 缓存过期时间，默认180秒
                         .expireAfterWrite(serverConfig.getResponseCacheAutoExpirationInSeconds(), TimeUnit.SECONDS)
-                        // 删除后的监听
+                        // <2> 删除后的监听
                         .removalListener(new RemovalListener<Key, Value>() {
                             @Override
                             public void onRemoval(RemovalNotification<Key, Value> notification) {
@@ -161,16 +162,16 @@ public class ResponseCacheImpl implements ResponseCache {
                                 }
                             }
                         })
-                        // CacheLoader 是缓存加载(就是 get 不到的时候，就会进入这里)
+                        // <3> CacheLoader 是缓存加载(就是 get 不到的时候，就会进入这里)
                         .build(new CacheLoader<Key, Value>() {
                             @Override
                             public Value load(Key key) throws Exception {
-                                //
+                                // <3.1>
                                 if (key.hasRegions()) {
                                     Key cloneWithNoRegions = key.cloneWithoutRegions();
                                     regionSpecificKeys.put(cloneWithNoRegions, key);
                                 }
-                                //
+                                // <3.2> 去加载新的数据
                                 Value value = generatePayload(key);
                                 return value;
                             }
@@ -238,9 +239,9 @@ public class ResponseCacheImpl implements ResponseCache {
 
     @VisibleForTesting
     String get(final Key key, boolean useReadOnlyCache) {
-        // 从缓存中获取
+        // <1> 从缓存中获取
         Value payload = getValue(key, useReadOnlyCache);
-        // 缓存不存在 || 为空字符串("")，进入
+        // <2> 缓存不存在 || 为空字符串("")，进入
         if (payload == null || payload.getPayload().equals(EMPTY_PAYLOAD)) {
             return null;
         } else {
@@ -387,23 +388,23 @@ public class ResponseCacheImpl implements ResponseCache {
     Value getValue(final Key key, boolean useReadOnlyCache) {
         Value payload = null;
         try {
-            // 是否使用缓存
+            // <1> 是否使用缓存
             if (useReadOnlyCache) {
                 // tip: readOnlyCacheMap 是一个只读缓存
 
-                // 从只读缓存中获取
+                // <2> 从只读缓存中获取
                 final Value currentPayload = readOnlyCacheMap.get(key);
                 if (currentPayload != null) {
                     payload = currentPayload;
                 } else {
-                    // 没有从 读写缓存获取
+                    // <2.1> 没有从 读写缓存获取
                     // tip: 如果 readWriteCacheMap 缓存也没有怎么办呢?
                     // tip: readWriteCacheMap 是 guava 的 LoadingCache 缓存，可以看创建LoadingCache地方，get 不到的策略处理
                     payload = readWriteCacheMap.get(key);
                     readOnlyCacheMap.put(key, payload);
                 }
             } else {
-                // 读写缓存中获取
+                // <3> 读写缓存中获取
                 payload = readWriteCacheMap.get(key);
             }
         } catch (Throwable t) {
@@ -455,26 +456,29 @@ public class ResponseCacheImpl implements ResponseCache {
      * Generate pay load for the given key.
      */
     private Value generatePayload(Key key) {
+        // 就是一个计时器，看本次耗时时间
         Stopwatch tracer = null;
         try {
             String payload;
+            // <1>
             switch (key.getEntityType()) {
                 case Application:
                     boolean isRemoteRegionRequested = key.hasRegions();
                     if (ALL_APPS.equals(key.getName())) {
-                        // tip: ALL_APPS 全量获取
+                        // <1> tip: ALL_APPS 全量获取
 
                         if (isRemoteRegionRequested) {
                             tracer = serializeAllAppsWithRemoteRegionTimer.start();
+                            // <1.1> 获取远程服务的
                             payload = getPayLoad(key, registry.getApplicationsFromMultipleRegions(key.getRegions()));
                         } else {
                             tracer = serializeAllAppsTimer.start();
-
+                            // <1.2> 获取本地服务的
                             // 1、registry.getApplications() 获取全部的 applications
                             payload = getPayLoad(key, registry.getApplications());
                         }
                     } else if (ALL_APPS_DELTA.equals(key.getName())) {
-                        // tip: ALL_APPS_DELTA 增量获取
+                        // <2> tip: ALL_APPS_DELTA 增量获取
 
                         if (isRemoteRegionRequested) {
                             tracer = serializeDeltaAppsWithRemoteRegionTimer.start();

@@ -127,7 +127,7 @@ public class ApplicationsResource {
                                   @HeaderParam(EurekaAccept.HTTP_X_EUREKA_ACCEPT) String eurekaAccept,
                                   @Context UriInfo uriInfo,
                                   @Nullable @QueryParam("regions") String regionsStr) {
-        // tip: 这个是 云服务器
+        // <1> tip: 这个是 云服务器
         boolean isRemoteRegionRequested = null != regionsStr && !regionsStr.isEmpty();
         String[] regions = null;
         if (!isRemoteRegionRequested) {
@@ -145,9 +145,9 @@ public class ApplicationsResource {
         if (!registry.shouldAllowAccess(isRemoteRegionRequested)) {
             return Response.status(Status.FORBIDDEN).build();
         }
-        // 设置当前请求的版本号，里面是一个 threadLocal
+        // <2> 设置当前请求的版本号，里面是一个 threadLocal
         CurrentRequestVersion.set(Version.toEnum(version));
-        // 请求返回类型，默认是 application/json
+        // <3> 请求返回类型，默认是 application/json
         KeyType keyType = Key.KeyType.JSON;
         String returnMediaType = MediaType.APPLICATION_JSON;
         if (acceptHeader == null || !acceptHeader.contains(HEADER_JSON_VALUE)) {
@@ -158,20 +158,22 @@ public class ApplicationsResource {
         // tip: cacheKey 用于 ResponseCacheImpl 缓存使用
         // 如下业务：是采用 responseCache 实现类是 ResponseCacheImpl，就是去缓存中获取
 
-        // 生成cachekey
+        // <4> 生成cachekey
         Key cacheKey = new Key(Key.EntityType.Application,
                 ResponseCacheImpl.ALL_APPS,
                 keyType, CurrentRequestVersion.get(), EurekaAccept.fromString(eurekaAccept), regions
         );
 
-        // tip: 响应请求，这里会动态的适配，application/json 和 xml 格式响应(eureka 使用的不是 spring mvc 所以和我们spring的方式不一样)
+        // <5> tip: 响应请求，这里会动态的适配，application/json 和 xml 格式响应(eureka 使用的不是 spring mvc 所以和我们spring的方式不一样)
         Response response;
         if (acceptEncoding != null && acceptEncoding.contains(HEADER_GZIP_VALUE)) {
+            // <5.1> responseCache.getGZIP(cacheKey) 拉取注册信息，并GZIP压缩数据
             response = Response.ok(responseCache.getGZIP(cacheKey))
                     .header(HEADER_CONTENT_ENCODING, HEADER_GZIP_VALUE)
                     .header(HEADER_CONTENT_TYPE, returnMediaType)
                     .build();
         } else {
+            // <5.2> responseCache.get(cacheKey) 拉取注册信息
             response = Response.ok(responseCache.get(cacheKey))
                     .build();
         }
