@@ -17,6 +17,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 在执行超时时调度子任务的主管任务。包装的子任务必须是线程安全的。
+ *
  * A supervisor task that schedules subtasks while enforce a timeout.
  * Wrapped subtasks must be thread safe.
  *
@@ -43,16 +45,17 @@ public class TimedSupervisorTask extends TimerTask {
     public TimedSupervisorTask(String name, ScheduledExecutorService scheduler, ThreadPoolExecutor executor,
                                int timeout, TimeUnit timeUnit, int expBackOffBound, Runnable task) {
         this.name = name;
-        // 调度执行器
+        // <1.1> 调度执行器
         this.scheduler = scheduler;
-        // 执行器
+        // <1.2> 执行器
         this.executor = executor;
         this.timeoutMillis = timeUnit.toMillis(timeout);
         this.task = task;
         this.delay = new AtomicLong(timeoutMillis);
-        // 最大延时时间
+        // <1.3> 最大延时时间
         this.maxDelay = timeoutMillis * expBackOffBound;
 
+        // <1.4> 初始化计数器并注册。
         // Initialize the counters and register.
         successCounter = Monitors.newCounter("success");
         timeoutCounter = Monitors.newCounter("timeouts");
@@ -64,29 +67,29 @@ public class TimedSupervisorTask extends TimerTask {
 
     @Override
     public void run() {
-        // Future 任务
+        // <2.1> Future 任务
         Future<?> future = null;
         try {
             future = executor.submit(task);
-            // 获取线程池 激活的数量 设置到threadPoolLevelGauge
+            // <2.2> 获取线程池 激活的数量 设置到threadPoolLevelGauge
             threadPoolLevelGauge.set((long) executor.getActiveCount());
-            // 获取 future 返回值信息，设置一个超时时间
+            // <2.3> 获取 future 返回值信息，设置一个超时时间
             future.get(timeoutMillis, TimeUnit.MILLISECONDS);  // block until done or timeout
-            // 设置延时时间
+            // <2.4> 设置延时时间
             // tip: TimedSupervisorTask 构造方法中也初始化一次，这里每次 run 的时候重新设置，catch 中会重新计算本次请求的时间
             delay.set(timeoutMillis);
-            // 获取线程池 激活的数量 设置到threadPoolLevelGauge
+            // <2.5> 获取线程池 激活的数量 设置到threadPoolLevelGauge
             threadPoolLevelGauge.set((long) executor.getActiveCount());
-            // 这就是一个 AtomicLong 计数器，每次都 +1
+            // <2.6> 这就是一个 AtomicLong 计数器，每次都 +1
             successCounter.increment();
         } catch (TimeoutException e) {
             logger.warn("task supervisor timed out", e);
-            // 超时记录
+            // <3.1> 超时记录
             timeoutCounter.increment();
             // tip: 超时时间和最大超时时间，取最小，所以在设置的时候需要注意
             long currentDelay = delay.get();
             long newDelay = Math.min(maxDelay, currentDelay * 2);
-            // 重新设置延时时间
+            // <3.2> 重新设置延时时间
             delay.compareAndSet(currentDelay, newDelay);
 
             // tip：超时时间10秒，最大30秒
@@ -109,10 +112,11 @@ public class TimedSupervisorTask extends TimerTask {
             // 未知的异常，每次都 +1
             throwableCounter.increment();
         } finally {
-            // 关闭 future
+            // <5.1> 关闭 future
             if (future != null) {
                 future.cancel(true);
             }
+            // <5.2>
             // tip：这里有点意思，这是一个死循环(scheduler 线程池没有关闭的情况下)
             // tip: scheduler 是一个外部传入的 ScheduledExecutorService，外面没有关闭 scheduler 那么就会一直 run.
             if (!scheduler.isShutdown()) {

@@ -95,19 +95,20 @@ class InstanceInfoReplicator implements Runnable {
     }
 
     public boolean onDemandUpdate() {
+        // 限流
         if (rateLimiter.acquire(burstSize, allowedRatePerMinute)) {
             if (!scheduler.isShutdown()) {
                 scheduler.submit(new Runnable() {
                     @Override
                     public void run() {
                         logger.debug("Executing on-demand update of local InstanceInfo");
-    
+                        // tip: scheduledPeriodicRef　是一个引用，再start的时候赋值的
                         Future latestPeriodic = scheduledPeriodicRef.get();
                         if (latestPeriodic != null && !latestPeriodic.isDone()) {
                             logger.debug("Canceling the latest scheduled update, it will be rescheduled at the end of on demand update");
                             latestPeriodic.cancel(false);
                         }
-    
+                        // 实例信息复制器
                         InstanceInfoReplicator.this.run();
                     }
                 });
@@ -124,11 +125,14 @@ class InstanceInfoReplicator implements Runnable {
 
     public void run() {
         try {
+            // 刷新 InstanceInfo 信息
             discoveryClient.refreshInstanceInfo();
-
+            // 脏数据时间
             Long dirtyTimestamp = instanceInfo.isDirtyWithTime();
             if (dirtyTimestamp != null) {
+                // 重新注册
                 discoveryClient.register();
+                // 设置非脏数据
                 instanceInfo.unsetIsDirty(dirtyTimestamp);
             }
         } catch (Throwable t) {

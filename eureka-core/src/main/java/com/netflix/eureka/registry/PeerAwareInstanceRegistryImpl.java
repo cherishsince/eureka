@@ -654,22 +654,30 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     private void replicateToPeers(Action action, String appName, String id,
                                   InstanceInfo info /* optional */,
                                   InstanceStatus newStatus /* optional */, boolean isReplication) {
+        // <1> 开始计时
         Stopwatch tracer = action.getTimer().start();
         try {
+            // <2> 是否复制
             if (isReplication) {
                 // 复制次数 +1
                 numberOfReplicationsLastMin.increment();
             }
+            // <2> 没有eureka其他节点 || 不复制就直接返回
             // If it is a replication already, do not replicate again as this will create a poison replication
             if (peerEurekaNodes == Collections.EMPTY_LIST || isReplication) {
                 return;
             }
 
+            // <3> 循环节点，挨个复制
             for (final PeerEurekaNode node : peerEurekaNodes.getPeerEurekaNodes()) {
+                // <3.1> 排除自己
+                // 如果该URL代表此主机，请不要复制到您自己。
                 // If the url represents this host, do not replicate to yourself.
                 if (peerEurekaNodes.isThisMyUrl(node.getServiceUrl())) {
                     continue;
                 }
+                // <3.2> 调用复制
+                // tip: 就是复制请求，是register就发送register，是 Cancel 就发送 Cancel
                 replicateInstanceActionsToPeers(action, appName, id, info, newStatus, node);
             }
         } finally {
@@ -678,9 +686,10 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 将所有实例更改复制到对等eureka节点，但复制到该节点的流量除外。
+     *
      * Replicates all instance changes to peer eureka nodes except for
      * replication traffic to this node.
-     *
      */
     private void replicateInstanceActionsToPeers(Action action, String appName,
                                                  String id, InstanceInfo info, InstanceStatus newStatus,

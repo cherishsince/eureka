@@ -196,6 +196,9 @@ public class ApplicationInfoManager {
     }
 
     /**
+     * 重新获取主机名以检查其是否已更改。
+     * 如果已存在，则重新获取整个<code> DataCenterInfo <code>，并在下一个心跳时将其传递到eureka服务器。
+     *
      * Refetches the hostname to check if it has changed. If it has, the entire
      * <code>DataCenterInfo</code> is refetched and passed on to the eureka
      * server on next heartbeat.
@@ -203,6 +206,7 @@ public class ApplicationInfoManager {
      * see {@link InstanceInfo#getHostName()} for explanation on why the hostname is used as the default address
      */
     public void refreshDataCenterInfoIfRequired() {
+        // host 地址信息
         String existingAddress = instanceInfo.getHostName();
 
         String existingSpotInstanceAction = null;
@@ -210,6 +214,7 @@ public class ApplicationInfoManager {
             existingSpotInstanceAction = ((AmazonInfo) instanceInfo.getDataCenterInfo()).get(AmazonInfo.MetaDataKey.spotInstanceAction);
         }
 
+        // 新的 address
         String newAddress;
         if (config instanceof RefreshableInstanceConfig) {
             // Refresh data center info, and return up to date address
@@ -217,13 +222,13 @@ public class ApplicationInfoManager {
         } else {
             newAddress = config.getHostName(true);
         }
+        // 获取 ip 地址
         String newIp = config.getIpAddress();
-
         if (newAddress != null && !newAddress.equals(existingAddress)) {
             logger.warn("The address changed from : {} => {}", existingAddress, newAddress);
             updateInstanceInfo(newAddress, newIp);
         }
-
+        // 数据中心
         if (config.getDataCenterInfo() instanceof AmazonInfo) {
             String newSpotInstanceAction = ((AmazonInfo) config.getDataCenterInfo()).get(AmazonInfo.MetaDataKey.spotInstanceAction);
             if (newSpotInstanceAction != null && !newSpotInstanceAction.equals(existingSpotInstanceAction)) {
@@ -251,11 +256,14 @@ public class ApplicationInfoManager {
     }
 
     public void refreshLeaseInfoIfRequired() {
+        // 获取当前租赁信息
         LeaseInfo leaseInfo = instanceInfo.getLeaseInfo();
         if (leaseInfo == null) {
             return;
         }
+        // 以秒为单位获取租约到期期限
         int currentLeaseDuration = config.getLeaseExpirationDurationInSeconds();
+        // 数秒内获得租约续订间隔
         int currentLeaseRenewal = config.getLeaseRenewalIntervalInSeconds();
         if (leaseInfo.getDurationInSecs() != currentLeaseDuration || leaseInfo.getRenewalIntervalInSecs() != currentLeaseRenewal) {
             LeaseInfo newLeaseInfo = LeaseInfo.Builder.newBuilder()

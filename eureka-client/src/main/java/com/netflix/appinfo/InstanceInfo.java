@@ -1246,6 +1246,8 @@ public class InstanceInfo {
     }
 
     /**
+     * 如果lastDirtyTimestamp很脏，则为null。
+     *
      * @return the lastDirtyTimestamp if is dirty, null otherwise.
      */
     public synchronized Long isDirtyWithTime() {
