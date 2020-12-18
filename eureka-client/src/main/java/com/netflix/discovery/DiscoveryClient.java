@@ -1461,21 +1461,27 @@ public class DiscoveryClient implements EurekaClient {
     }
 
     private void cancelScheduledTasks() {
+        // 关闭复制
         if (instanceInfoReplicator != null) {
             instanceInfoReplicator.stop();
         }
+        // 关闭心跳
         if (heartbeatExecutor != null) {
             heartbeatExecutor.shutdownNow();
         }
+        // 关闭刷新
         if (cacheRefreshExecutor != null) {
             cacheRefreshExecutor.shutdownNow();
         }
+        // 关闭任务调度
         if (scheduler != null) {
             scheduler.shutdownNow();
         }
+        // 关闭缓存刷新任务
         if (cacheRefreshTask != null) {
             cacheRefreshTask.cancel();
         }
+        // 关闭心跳任务
         if (heartbeatTask != null) {
             heartbeatTask.cancel();
         }

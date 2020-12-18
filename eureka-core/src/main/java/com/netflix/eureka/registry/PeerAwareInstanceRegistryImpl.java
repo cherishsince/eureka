@@ -200,11 +200,13 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      * many instances at a time.
      */
     private void scheduleRenewalThresholdUpdateTask() {
+        // 每15分钟执行一次
         timer.schedule(new TimerTask() {
                            @Override
                            public void run() {
                                updateRenewalThreshold();
                            }
+                           // 15分钟
                        }, serverConfig.getRenewalThresholdUpdateIntervalMs(),
                 serverConfig.getRenewalThresholdUpdateIntervalMs());
     }
@@ -555,6 +557,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      */
     private void updateRenewalThreshold() {
         try {
+            // 计算 应用实例数
             Applications apps = eurekaClient.getApplications();
             int count = 0;
             for (Application app : apps.getRegisteredApplications()) {
@@ -564,6 +567,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
                     }
                 }
             }
+            // 计算 expectedNumberOfRenewsPerMin 、 numberOfRenewsPerMinThreshold 参数
             synchronized (lock) {
                 // Update threshold only if the threshold is greater than the
                 // current expected threshold or if self preservation is disabled.

@@ -238,42 +238,42 @@ public class RemoteRegionRegistry implements LookupService<String> {
      *
      * @return true, if the fetch was successful, false otherwise.
      */
-private boolean fetchRegistry() {
-    boolean success;
-    // <1> 启动一个计时器，开始计时
-    Stopwatch tracer = fetchRegistryTimer.start();
-    try {
-        // <2> 如果禁用增量，或者这是第一次，请获取所有应用程序
-        // If the delta is disabled or if it is the first time, get all applications
-        if (serverConfig.shouldDisableDeltaForRemoteRegions()
-                || (getApplications() == null)
-                || (getApplications().getRegisteredApplications().size() == 0)) {
-            logger.info("Disable delta property : {}", serverConfig.shouldDisableDeltaForRemoteRegions());
-            logger.info("Application is null : {}", getApplications() == null);
-            logger.info("Registered Applications size is zero : {}", getApplications().getRegisteredApplications().isEmpty());
-            // <2.1> 全量拉取
-            success = storeFullRegistry();
-        } else {
-            // <2.2> 增量拉取
-            success = fetchAndStoreDelta();
+    private boolean fetchRegistry() {
+        boolean success;
+        // <1> 启动一个计时器，开始计时
+        Stopwatch tracer = fetchRegistryTimer.start();
+        try {
+            // <2> 如果禁用增量，或者这是第一次，请获取所有应用程序
+            // If the delta is disabled or if it is the first time, get all applications
+            if (serverConfig.shouldDisableDeltaForRemoteRegions()
+                    || (getApplications() == null)
+                    || (getApplications().getRegisteredApplications().size() == 0)) {
+                logger.info("Disable delta property : {}", serverConfig.shouldDisableDeltaForRemoteRegions());
+                logger.info("Application is null : {}", getApplications() == null);
+                logger.info("Registered Applications size is zero : {}", getApplications().getRegisteredApplications().isEmpty());
+                // <2.1> 全量拉取
+                success = storeFullRegistry();
+            } else {
+                // <2.2> 增量拉取
+                success = fetchAndStoreDelta();
+            }
+            // <3>
+            logTotalInstances();
+        } catch (Throwable e) {
+            logger.error("Unable to fetch registry information from the remote registry {}", this.remoteRegionURL, e);
+            return false;
+        } finally {
+            // <4> 停止计时器
+            if (tracer != null) {
+                tracer.stop();
+            }
         }
-        // <3>
-        logTotalInstances();
-    } catch (Throwable e) {
-        logger.error("Unable to fetch registry information from the remote registry {}", this.remoteRegionURL, e);
-        return false;
-    } finally {
-        // <4> 停止计时器
-        if (tracer != null) {
-            tracer.stop();
+        // <5> 保存一下，拉取的时候(上次成功远程获取的时间)
+        if (success) {
+            timeOfLastSuccessfulRemoteFetch = System.currentTimeMillis();
         }
+        return success;
     }
-    // <5> 保存一下，拉取的时候(上次成功远程获取的时间)
-    if (success) {
-        timeOfLastSuccessfulRemoteFetch = System.currentTimeMillis();
-    }
-    return success;
-}
 
     private boolean fetchAndStoreDelta() throws Throwable {
         long currGeneration = fetchRegistryGeneration.get();
