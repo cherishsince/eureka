@@ -1607,18 +1607,19 @@ public class DiscoveryClient implements EurekaClient {
     @VisibleForTesting
     void refreshRegistry() {
         try {
-            // 是否获取远程区域注册信息
+            // <1> 是否获取远程区域注册信息
             boolean isFetchingRemoteRegionRegistries = isFetchingRemoteRegionRegistries();
-            // 远程注册是否修改
+            // <2> 远程注册是否修改
             boolean remoteRegionsModified = false;
             // 这样可以确保对远程区域进行动态更改以获取数据。
             // This makes sure that a dynamic change to remote regions to fetch is honored.
 
-            // 以逗号分隔的区域列表，将获取其eureka注册表信息
+            // <3> 以逗号分隔的区域列表，将获取其eureka注册表信息
             String latestRemoteRegions = clientConfig.fetchRegistryForRemoteRegions();
             if (null != latestRemoteRegions) {
                 String currentRemoteRegions = remoteRegionsToFetch.get();
                 if (!latestRemoteRegions.equals(currentRemoteRegions)) {
+                    // remoteRegionsToFetch和AzToRegionMapper.regionsToFetch都需要同步
                     // Both remoteRegionsToFetch and AzToRegionMapper.regionsToFetch need to be in sync
                     synchronized (instanceRegionChecker.getAzToRegionMapper()) {
                         if (remoteRegionsToFetch.compareAndSet(currentRemoteRegions, latestRemoteRegions)) {
@@ -1637,12 +1638,14 @@ public class DiscoveryClient implements EurekaClient {
                 }
             }
 
+            // <6> 拉取注册列表
             boolean success = fetchRegistry(remoteRegionsModified);
             if (success) {
                 registrySize = localRegionApps.get().size();
                 lastSuccessfulRegistryFetchTimestamp = System.currentTimeMillis();
             }
 
+            // <7> debug 打印日志
             if (logger.isDebugEnabled()) {
                 StringBuilder allAppsHashCodes = new StringBuilder();
                 allAppsHashCodes.append("Local region apps hashcode: ");
