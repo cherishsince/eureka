@@ -128,10 +128,12 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     protected void initRemoteRegionRegistry() throws MalformedURLException {
+        // <1> 获取远程仓库地址信息
         Map<String, String> remoteRegionUrlsWithName = serverConfig.getRemoteRegionUrlsWithName();
         if (!remoteRegionUrlsWithName.isEmpty()) {
             allKnownRemoteRegions = new String[remoteRegionUrlsWithName.size()];
             int remoteRegionArrayIndex = 0;
+            // <2> 循环创建 RemoteRegionRegistry
             for (Map.Entry<String, String> remoteRegionUrlWithName : remoteRegionUrlsWithName.entrySet()) {
                 RemoteRegionRegistry remoteRegionRegistry = new RemoteRegionRegistry(
                         serverConfig,
@@ -328,71 +330,72 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      * in the remote peers as valid cancellations, so self preservation mode would not kick-in.
      */
     protected boolean internalCancel(String appName, String id, boolean isReplication) {
-        // ReentrantReadWriteLock 读取lock
+        // <1> ReentrantReadWriteLock 读取lock
         read.lock();
         try {
-            // 取消注册计数 +1
+            // <2> 取消注册计数 +1
             CANCEL.increment(isReplication);
-            // 从 registry 根据 appName 获取注册实例
+            // <3> 从 registry 根据 appName 获取注册实例
             Map<String, Lease<InstanceInfo>> gMap = registry.get(appName);
-            // 记录删除的实例
+            // <4> 记录删除的实例
             Lease<InstanceInfo> leaseToCancel = null;
             if (gMap != null) {
                 // 删除注册的实例
                 leaseToCancel = gMap.remove(id);
             }
 
+            // <5>
             // tip: recentCanceledQueue 是一个取消的队列
             // tip: overriddenInstanceStatusMap 用于保存服务状态
 
             // 将取消的实例，添加到 recentCanceledQueue
             recentCanceledQueue.add(new Pair<Long, String>(System.currentTimeMillis(), appName + "(" + id + ")"));
-            // 删除实例的状态缓存
+            // <6> 删除实例的状态缓存
             InstanceStatus instanceStatus = overriddenInstanceStatusMap.remove(id);
             if (instanceStatus != null) {
                 logger.debug("Removed instance id {} from the overridden map which has value {}", id, instanceStatus.name());
             }
-            // leaseToCancel 是我们删除的实例，如果没找到，这里需要 +1
+            // <7> leaseToCancel 是我们删除的实例，如果没找到，这里需要 +1
             if (leaseToCancel == null) {
                 // 未找到取消 count +1
                 CANCEL_NOT_FOUND.increment(isReplication);
                 logger.warn("DS: Registry: cancel failed because Lease is not registered for: {}/{}", appName, id);
                 return false;
             } else {
-                // tip: 这里的 cancel 里面只是更新了一个 evictionTimestamp(驱逐时间)
+                // <8> tip: 这里的 cancel 里面只是更新了一个 evictionTimestamp(驱逐时间)
                 leaseToCancel.cancel();
-                // 获取的是 InstanceInfo 实例信息
+                // <9> 获取的是 InstanceInfo 实例信息
                 InstanceInfo instanceInfo = leaseToCancel.getHolder();
                 String vip = null;
                 String svip = null;
                 if (instanceInfo != null) {
-                    // 设置 actionType 为 deleted
+                    // <9.1> 设置 actionType 为 deleted
                     instanceInfo.setActionType(ActionType.DELETED);
-                    // 添加到 最近变化queue
+                    // <9.2> 添加到 最近变化queue
                     recentlyChangedQueue.add(new RecentlyChangedItem(leaseToCancel));
-                    // 更新最后 更新时间
+                    // <9.3> 更新最后 更新时间
                     instanceInfo.setLastUpdatedTimestamp();
-                    // 这是两个虚拟的 vip 地址，没有设置获取的是ip
+                    // <9.4> 这是两个虚拟的 vip 地址，没有设置获取的是ip
                     vip = instanceInfo.getVIPAddress();
                     svip = instanceInfo.getSecureVipAddress();
                 }
-                // 将缓存失效
+                // <10> 将缓存失效
                 invalidateCache(appName, vip, svip);
                 logger.info("Cancelled instance {}/{} (replication={})", appName, id, isReplication);
             }
         } finally {
             read.unlock();
         }
-        // tip: 更新一下客户端数量，关闭了一个客户端 这里需要 -1
+
+        // <11> tip: 更新一下客户端数量，关闭了一个客户端 这里需要 -1
         synchronized (lock) {
             if (this.expectedNumberOfClientsSendingRenews > 0) {
                 // Since the client wants to cancel it, reduce the number of clients to send renews.
                 this.expectedNumberOfClientsSendingRenews = this.expectedNumberOfClientsSendingRenews - 1;
-                // 更新每分钟阈值(客户端数量，和请求的延迟，这些信息)
+                // <11.2> 更新每分钟阈值(客户端数量，和请求的延迟，这些信息)
                 updateRenewsPerMinThreshold();
             }
         }
-
         return true;
     }
 
@@ -514,6 +517,9 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     /**
+     * 更新实例的状态。通常碰巧会在{@link InstanceStatus#OUT_OF_SERVICE}
+     * 和{@link InstanceStatus#UP}之间放置一个实例，以使该实例进出流量。
+     *
      * Updates the status of an instance. Normally happens to put an instance
      * between {@link InstanceStatus#OUT_OF_SERVICE} and
      * {@link InstanceStatus#UP} to put the instance in and out of traffic.
@@ -581,6 +587,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     }
 
     /**
+     * 删除给定实例的状态替代。
      * Removes status override for a give instance.
      *
      * @param appName            the application name of the instance.
@@ -1065,6 +1072,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         Map<String, Application> applicationInstancesMap = new HashMap<String, Application>();
         write.lock();
         try {
+            // 变更队列
             Iterator<RecentlyChangedItem> iter = this.recentlyChangedQueue.iterator();
             logger.debug("The number of elements in the delta queue is :{}", this.recentlyChangedQueue.size());
             while (iter.hasNext()) {
@@ -1080,11 +1088,13 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 }
                 app.addInstance(new InstanceInfo(decorateInstanceInfo(lease)));
             }
-
+            // <3> 是否保护远程的区域实例
             if (includeRemoteRegion) {
+                // <3.1> 远程区域服务地址
                 for (String remoteRegion : remoteRegions) {
                     RemoteRegionRegistry remoteRegistry = regionNameVSRemoteRegistry.get(remoteRegion);
                     if (null != remoteRegistry) {
+                        // 远程注册中心增量信息
                         Applications remoteAppsDelta = remoteRegistry.getApplicationDeltas();
                         if (null != remoteAppsDelta) {
                             for (Application application : remoteAppsDelta.getRegisteredApplications()) {
@@ -1104,7 +1114,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                     }
                 }
             }
-
+            //
             Applications allApps = getApplicationsFromMultipleRegions(remoteRegions);
             apps.setAppsHashCode(allApps.getReconcileHashCode());
             return apps;
@@ -1301,12 +1311,12 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         // tip：这里计算的是 eureka server 当前的阀值
         // tip: 默认 getRenewalPercentThreshold 最大为 85%
 
-        // tip: 客户端心跳时间(默认30秒) / 60 = 2(服务端预期能够在60秒收到客户端几次心跳)
+        // <1> tip: 客户端心跳时间(默认30秒) / 60 = 2(服务端预期能够在60秒收到客户端几次心跳)
         double d1 = (60.0 / serverConfig.getExpectedClientRenewalIntervalSeconds());
-        // tip: 客户端发送续约，预期的一个数量(就是客户端数量) * 每分钟能够收到几次心跳
+        // <2> tip: 客户端发送续约，预期的一个数量(就是客户端数量) * 每分钟能够收到几次心跳
         double d2 = this.expectedNumberOfClientsSendingRenews * d1;
         // tip: eureka server 配置的百分比阀值(85%)，计算每分钟阀值(d2 * eurekaServer配置的百分比阀值)
-        // tip: 如果预期为 100 个心跳之 * 0.85 = 85个心跳
+        // <3> tip: 如果预期为 100 个心跳之 * 0.85 = 85个心跳
         this.numberOfRenewsPerMinThreshold = (int) (d2 * serverConfig.getRenewalPercentThreshold());
 //        this.numberOfRenewsPerMinThreshold =
 //                (int) (this.expectedNumberOfClientsSendingRenews

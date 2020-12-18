@@ -280,13 +280,14 @@ public class InstanceResource {
     @DELETE
     public Response cancelLease(@HeaderParam(PeerEurekaNode.HEADER_REPLICATION) String isReplication) {
         try {
-            // 调用 PeerAwareInstanceRegistry 进行关闭
+            // <1> 调用 PeerAwareInstanceRegistry 进行关闭
             boolean isSuccess = registry.cancel(app.getName(), id, "true".equals(isReplication));
-            // 关闭是否成功
+            // <2> 关闭是否成功
             if (isSuccess) {
                 logger.debug("Found (Cancel): {} - {}", app.getName(), id);
                 return Response.ok().build();
             } else {
+                // <2.2> 关闭失败返回 NOT_FOUND
                 logger.info("Not Found (Cancel): {} - {}", app.getName(), id);
                 return Response.status(Status.NOT_FOUND).build();
             }

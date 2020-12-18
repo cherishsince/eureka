@@ -289,6 +289,7 @@ public class ResponseCacheImpl implements ResponseCache {
                         new Key(Key.EntityType.Application, ALL_APPS, type, v, EurekaAccept.full),
                         new Key(Key.EntityType.Application, ALL_APPS, type, v, EurekaAccept.compact),
                         new Key(Key.EntityType.Application, ALL_APPS_DELTA, type, v, EurekaAccept.full),
+                        // 所有 app 增量
                         new Key(Key.EntityType.Application, ALL_APPS_DELTA, type, v, EurekaAccept.compact)
                 );
                 if (null != vipAddress) {

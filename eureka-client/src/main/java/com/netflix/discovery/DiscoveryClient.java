@@ -987,12 +987,12 @@ public class DiscoveryClient implements EurekaClient {
      * unregister w/ the eureka service.
      */
     void unregister() {
-        // 判断 eurekaTransport 状态信息
+        // <1> 判断 eurekaTransport 状态信息
         // It can be null if shouldRegisterWithEureka == false
         if (eurekaTransport != null && eurekaTransport.registrationClient != null) {
             try {
                 logger.info("Unregistering ...");
-                // 主动 取消注册(优雅的关闭)
+                // <2> 主动 取消注册(优雅的关闭)
                 EurekaHttpResponse<Void> httpResponse = eurekaTransport.registrationClient.cancel(instanceInfo.getAppName(), instanceInfo.getId());
                 logger.info(PREFIX + "{} - deregister  status: {}", appPathIdentifier, httpResponse.getStatusCode());
             } catch (Exception e) {

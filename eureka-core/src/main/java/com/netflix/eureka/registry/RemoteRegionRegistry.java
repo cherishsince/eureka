@@ -15,24 +15,6 @@
  */
 package com.netflix.eureka.registry;
 
-import javax.inject.Inject;
-import javax.ws.rs.core.MediaType;
-import java.net.InetAddress;
-import java.net.URL;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.netflix.appinfo.InstanceInfo;
 import com.netflix.appinfo.InstanceInfo.ActionType;
@@ -61,19 +43,32 @@ import com.sun.jersey.client.apache4.ApacheHttpClient4;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
+import javax.ws.rs.core.MediaType;
+import java.net.InetAddress;
+import java.net.URL;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 import static com.netflix.eureka.Names.METRIC_REGISTRY_PREFIX;
 
 /**
  * Handles all registry operations that needs to be done on a eureka service running in an other region.
- *
+ * <p>
  * The primary operations include fetching registry information from remote region and fetching delta information
  * on a periodic basis.
- *
+ * <p>
  * TODO: a lot of the networking code in this class can be replaced by newer code in
  * {@link com.netflix.discovery.DiscoveryClient}
  *
  * @author Karthik Ranganathan
- *
  */
 public class RemoteRegionRegistry implements LookupService<String> {
     private static final Logger logger = LoggerFactory.getLogger(RemoteRegionRegistry.class);
@@ -103,10 +98,12 @@ public class RemoteRegionRegistry implements LookupService<String> {
                                 ServerCodecs serverCodecs,
                                 String regionName,
                                 URL remoteRegionURL) {
+        // <1> 简单的赋值
         this.serverConfig = serverConfig;
         this.remoteRegionURL = remoteRegionURL;
         this.fetchRegistryTimer = Monitors.newTimer(this.remoteRegionURL.toString() + "_FetchRegistry");
 
+        // <2> 构建一个 Eureka 请求客户端
         EurekaJerseyClientBuilder clientBuilder = new EurekaJerseyClientBuilder()
                 .withUserAgent("Java-EurekaClient-RemoteRegion")
                 .withEncoderWrapper(serverCodecs.getFullJsonCodec())
@@ -117,6 +114,7 @@ public class RemoteRegionRegistry implements LookupService<String> {
                 .withMaxTotalConnections(serverConfig.getRemoteRegionTotalConnections())
                 .withConnectionIdleTimeout(serverConfig.getRemoteRegionConnectionIdleTimeoutSeconds());
 
+        // <3> 构建协议
         if (remoteRegionURL.getProtocol().equals("http")) {
             clientBuilder.withClientName("Discovery-RemoteRegionClient-" + regionName);
         } else if ("true".equals(System.getProperty("com.netflix.eureka.shouldSSLConnectionsUseSystemSocketFactory"))) {
@@ -129,7 +127,9 @@ public class RemoteRegionRegistry implements LookupService<String> {
                             serverConfig.getRemoteRegionTrustStorePassword()
                     );
         }
+        // <4> 构建请求的 discoveryJerseyClient
         discoveryJerseyClient = clientBuilder.build();
+        // <5> 构建请求的 discoveryApacheClient
         discoveryApacheClient = discoveryJerseyClient.getClient();
 
         // should we enable GZip decoding of responses based on Response Headers?
@@ -144,13 +144,18 @@ public class RemoteRegionRegistry implements LookupService<String> {
         } catch (UnknownHostException e) {
             logger.warn("Cannot find localhost ip", e);
         }
+        // EurekaServer 定义
         EurekaServerIdentity identity = new EurekaServerIdentity(ip);
+        // 添加一个 filter
         discoveryApacheClient.addFilter(new EurekaIdentityHeaderFilter(identity));
 
+        // 配置新的传输层（将来注入的候选对象）
         // Configure new transport layer (candidate for injecting in the future)
         EurekaHttpClient newEurekaHttpClient = null;
         try {
+            // 集群解析器
             ClusterResolver clusterResolver = StaticClusterResolver.fromURL(regionName, remoteRegionURL);
+            // 创建一个 EurekaHttpClient
             newEurekaHttpClient = EurekaServerHttpClients.createRemoteRegionClient(
                     serverConfig, clientConfig.getTransportConfig(), serverCodecs, clusterResolver);
         } catch (Exception e) {
@@ -169,6 +174,7 @@ public class RemoteRegionRegistry implements LookupService<String> {
             logger.error("Problem fetching registry information :", e);
         }
 
+        // <10> 远程拉取注册列表
         // remote region fetch
         Runnable remoteRegionFetchTask = new Runnable() {
             @Override
@@ -196,6 +202,7 @@ public class RemoteRegionRegistry implements LookupService<String> {
                         .setDaemon(true)
                         .build());
 
+        // <13> 设置定时调度，定时拉取远程注册表信息
         scheduler.schedule(
                 new TimedSupervisorTask(
                         "RemoteRegionFetch_" + regionName,
@@ -217,6 +224,7 @@ public class RemoteRegionRegistry implements LookupService<String> {
 
     /**
      * Check if this registry is ready for serving data.
+     *
      * @return true if ready, false otherwise.
      */
     public boolean isReadyForServingData() {
@@ -224,41 +232,48 @@ public class RemoteRegionRegistry implements LookupService<String> {
     }
 
     /**
+     * 从远程区域获取注册表信息。
+     * <p>
      * Fetch the registry information from the remote region.
+     *
      * @return true, if the fetch was successful, false otherwise.
      */
-    private boolean fetchRegistry() {
-        boolean success;
-        Stopwatch tracer = fetchRegistryTimer.start();
-
-        try {
-            // If the delta is disabled or if it is the first time, get all applications
-            if (serverConfig.shouldDisableDeltaForRemoteRegions()
-                    || (getApplications() == null)
-                    || (getApplications().getRegisteredApplications().size() == 0)) {
-                logger.info("Disable delta property : {}", serverConfig.shouldDisableDeltaForRemoteRegions());
-                logger.info("Application is null : {}", getApplications() == null);
-                logger.info("Registered Applications size is zero : {}", getApplications().getRegisteredApplications().isEmpty());
-                success = storeFullRegistry();
-            } else {
-                success = fetchAndStoreDelta();
-            }
-            logTotalInstances();
-        } catch (Throwable e) {
-            logger.error("Unable to fetch registry information from the remote registry {}", this.remoteRegionURL, e);
-            return false;
-        } finally {
-            if (tracer != null) {
-                tracer.stop();
-            }
+private boolean fetchRegistry() {
+    boolean success;
+    // <1> 启动一个计时器，开始计时
+    Stopwatch tracer = fetchRegistryTimer.start();
+    try {
+        // <2> 如果禁用增量，或者这是第一次，请获取所有应用程序
+        // If the delta is disabled or if it is the first time, get all applications
+        if (serverConfig.shouldDisableDeltaForRemoteRegions()
+                || (getApplications() == null)
+                || (getApplications().getRegisteredApplications().size() == 0)) {
+            logger.info("Disable delta property : {}", serverConfig.shouldDisableDeltaForRemoteRegions());
+            logger.info("Application is null : {}", getApplications() == null);
+            logger.info("Registered Applications size is zero : {}", getApplications().getRegisteredApplications().isEmpty());
+            // <2.1> 全量拉取
+            success = storeFullRegistry();
+        } else {
+            // <2.2> 增量拉取
+            success = fetchAndStoreDelta();
         }
-
-        if (success) {
-            timeOfLastSuccessfulRemoteFetch = System.currentTimeMillis();
+        // <3>
+        logTotalInstances();
+    } catch (Throwable e) {
+        logger.error("Unable to fetch registry information from the remote registry {}", this.remoteRegionURL, e);
+        return false;
+    } finally {
+        // <4> 停止计时器
+        if (tracer != null) {
+            tracer.stop();
         }
-
-        return success;
     }
+    // <5> 保存一下，拉取的时候(上次成功远程获取的时间)
+    if (success) {
+        timeOfLastSuccessfulRemoteFetch = System.currentTimeMillis();
+    }
+    return success;
+}
 
     private boolean fetchAndStoreDelta() throws Throwable {
         long currGeneration = fetchRegistryGeneration.get();
@@ -306,9 +321,8 @@ public class RemoteRegionRegistry implements LookupService<String> {
      * Updates the delta information fetches from the eureka server into the
      * local cache.
      *
-     * @param delta
-     *            the delta information received from eureka server in the last
-     *            poll cycle.
+     * @param delta the delta information received from eureka server in the last
+     *              poll cycle.
      */
     private void updateDelta(Applications delta) {
         int deltaCount = 0;
@@ -359,8 +373,7 @@ public class RemoteRegionRegistry implements LookupService<String> {
     /**
      * Close HTTP response object and its respective resources.
      *
-     * @param response
-     *            the HttpResponse object.
+     * @param response the HttpResponse object.
      */
     private void closeResponse(ClientResponse response) {
         if (response != null) {
@@ -373,6 +386,8 @@ public class RemoteRegionRegistry implements LookupService<String> {
     }
 
     /**
+     * 从eureka服务器获取完整的注册表信息，并将其存储在本地。
+     * <p>
      * Gets the full registry information from the eureka server and stores it
      * locally.
      *
@@ -395,13 +410,18 @@ public class RemoteRegionRegistry implements LookupService<String> {
     }
 
     /**
+     * 从远程区域获取注册表信息。
      * Fetch registry information from the remote region.
+     *
      * @param delta - true, if the fetch needs to get deltas, false otherwise
      * @return - response which has information about the data.
      */
     private Applications fetchRemoteRegistry(boolean delta) {
-        logger.info("Getting instance registry info from the eureka server : {} , delta : {}", this.remoteRegionURL, delta);
 
+        // tip: 远程区域获取注册表，里面发送请求
+
+        logger.info("Getting instance registry info from the eureka server : {} , delta : {}", this.remoteRegionURL, delta);
+        // 应该使用实验运输
         if (shouldUseExperimentalTransport()) {
             try {
                 EurekaHttpResponse<Applications> httpResponse = delta ? eurekaHttpClient.getDelta() : eurekaHttpClient.getApplications();
@@ -418,7 +438,6 @@ public class RemoteRegionRegistry implements LookupService<String> {
             ClientResponse response = null;
             try {
                 String urlPath = delta ? "apps/delta" : "apps/";
-
                 response = discoveryApacheClient.resource(this.remoteRegionURL + urlPath)
                         .accept(MediaType.APPLICATION_JSON_TYPE)
                         .get(ClientResponse.class);
@@ -440,7 +459,7 @@ public class RemoteRegionRegistry implements LookupService<String> {
     /**
      * Reconciles the delta information fetched to see if the hashcodes match.
      *
-     * @param delta - the delta information fetched previously for reconciliation.
+     * @param delta             - the delta information fetched previously for reconciliation.
      * @param reconcileHashCode - the hashcode for comparison.
      * @return - response
      * @throws Throwable
@@ -464,13 +483,15 @@ public class RemoteRegionRegistry implements LookupService<String> {
                     getApplications().getReconcileHashCode(),
                     delta.getAppsHashCode());
             return true;
-        }else {
+        } else {
             logger.warn("Not setting the applications map as another thread has advanced the update generation");
             return true;  // still return true
         }
     }
 
     /**
+     * 记录本地存储的未过滤实例的总数。
+     * <p>
      * Logs the total number of non-filtered instances stored locally.
      */
     private void logTotalInstances() {

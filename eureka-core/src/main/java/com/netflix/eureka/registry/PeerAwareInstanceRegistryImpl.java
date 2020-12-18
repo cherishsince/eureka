@@ -153,10 +153,13 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     public void init(PeerEurekaNodes peerEurekaNodes) throws Exception {
         this.numberOfReplicationsLastMin.start();
         this.peerEurekaNodes = peerEurekaNodes;
+        // <1> 初始化 response cache
         initializedResponseCache();
+        // <2> 定时更新阀值，自我保护的额阀值
         scheduleRenewalThresholdUpdateTask();
+        // <3> 初始化远程区域注册表
         initRemoteRegionRegistry();
-
+        // <4> 注册监听
         try {
             Monitors.registerObject(this);
         } catch (Throwable e) {
@@ -188,11 +191,13 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 计划定期更新<em>更新阈值<em>的任务。
+     * 更新阈值将用于确定更新是否由于网络分区而急剧下降，并保护一次过期的实例过多。
+     *
      * Schedule the task that updates <em>renewal threshold</em> periodically.
      * The renewal threshold would be used to determine if the renewals drop
      * dramatically because of network partition and to protect expiring too
      * many instances at a time.
-     *
      */
     private void scheduleRenewalThresholdUpdateTask() {
         timer.schedule(new TimerTask() {
@@ -386,9 +391,9 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      */
     @Override
     public boolean cancel(final String appName, final String id, final boolean isReplication) {
-        // 调用 super.cancel()
+        // <1> 调用 super.cancel()
         if (super.cancel(appName, id, isReplication)) {
-            // tip: 关闭成功后，复制给其他节点
+            // <2> tip: 关闭成功后，复制给其他节点
             replicateToPeers(Action.Cancel, appName, id, null, null, isReplication);
             return true;
         }
